@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/RGR" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/RGR" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-01" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-01" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-02" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-02" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-03" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-03" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-04" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-04" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-05" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-05" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-06" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-06" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/lab-07" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/lab-07" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>
