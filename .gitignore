@@ -1,0 +1,71 @@
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Gradle
+.gradle/
+build/
+gradle/
+gradlew
+gradlew.bat
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+~WRL*.tmp
+
+# Output directories
+out/
+target/
+bin/
+
+# Package files
+*.zip
+*.tar.gz
+*.rar
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation temp files
+~$*.docx
+~$*.doc
+~$*.pptx
+~$*.ppt
+~$*.xlsx
+~$*.xls
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Cache
+.cache/
