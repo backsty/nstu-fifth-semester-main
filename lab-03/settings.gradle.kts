@@ -1,4 +1,4 @@
-rootProject.name = "lab-02"
+rootProject.name = "lab-03"
 
 // Включаем Gradle build scan для аналитики
 plugins {
