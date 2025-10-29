@@ -1,0 +1,299 @@
+@startuml JsonSerializerArchitecture
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam packageStyle rectangle
+
+title JSON Serializer с Рефлексией и Аннотациями
+
+package "Annotations Layer" <<folder>> {
+    annotation JsonSerializable {
+        + includeNulls(): boolean = true
+        + comment(): String = ""
+    }
+    
+    annotation JsonField {
+        + value(): String
+        + required(): boolean = false
+        + order(): int = 0
+    }
+    
+    annotation JsonIgnore {
+        + reason(): String = "Excluded"
+    }
+}
+
+package "Exception Layer" <<folder>> {
+    class JsonException {
+        - className: String
+        - fieldName: String
+        + JsonException(String)
+        + JsonException(String, Throwable)
+        + JsonException(String, String, String)
+        + getClassName(): String
+        + getFieldName(): String
+    }
+    
+    class "JsonException.SerializationException" as SerializationException {
+        + SerializationException(String)
+        + SerializationException(String, String, String)
+        + SerializationException(String, Throwable)
+    }
+    
+    class "JsonException.DeserializationException" as DeserializationException {
+        + DeserializationException(String)
+        + DeserializationException(String, String, String)
+        + DeserializationException(String, Throwable)
+    }
+    
+    class "JsonException.CircularReferenceException" as CircularReferenceException {
+        + CircularReferenceException(String)
+    }
+}
+
+package "Serialization Core" <<folder>> {
+    class JsonSerializer {
+        - referenceTracker: ReferenceTracker
+        - prettyPrint: boolean
+        + JsonSerializer()
+        + JsonSerializer(boolean)
+        + serialize(Object): String
+        + serializeByClassName(String, Object): String
+        - serializeObject(Object, int): String
+        - serializeArray(Object, int): String
+        - serializeCollection(Collection, int): String
+        - serializeMap(Map, int): String
+        - serializeCustomObject(Object, int): String
+        - serializePrimitive(Object): String
+        - getAllFields(Class): List<Field>
+        - shouldSkipField(Field): boolean
+        - getFieldName(Field): String
+        - isPrimitive(Object): boolean
+        - escapeString(String): String
+        - getIndent(int): String
+        + getReferenceTracker(): ReferenceTracker
+    }
+    
+    class JsonDeserializer {
+        - referenceTracker: ReferenceTracker
+        + JsonDeserializer()
+        + deserialize(String, Class<T>): T
+        + deserializeByClassName(String, String): Object
+        - deserializeValue(String, Type): Object
+        - deserializePrimitive(String, Class): Object
+        - deserializeArray(String, Type): Object
+        - deserializeObject(String, Class): Object
+        - createInstance(Class): Object
+        - parseJsonArray(String): List<String>
+        - parseJsonObject(String): Map<String, String>
+        - findColonIndex(String): int
+        - unescapeString(String): String
+        - getAllFields(Class): List<Field>
+        - shouldSkipField(Field): boolean
+        - getFieldName(Field): String
+        - isPrimitiveType(Class): boolean
+    }
+    
+    class ReferenceTracker {
+        - objectToId: Map<Object, String>
+        - idToObject: Map<String, Object>
+        - currentlySerializing: Set<Object>
+        - idCounter: int
+        + isAlreadySerialized(Object): boolean
+        + getOrCreateId(Object): String
+        + startSerialization(Object): void
+        + endSerialization(Object): void
+        + getObjectById(String): Object
+        + registerObject(String, Object): void
+        + clear(): void
+        + {static} isReference(String): boolean
+        + {static} extractReferenceId(String): String
+        + {static} createReferenceString(String): String
+        - generateId(): String
+        + getStatistics(): String
+    }
+}
+
+package "Model Layer" <<folder>> {
+    class Person {
+        - name: String {JsonField("full_name")}
+        - age: int {JsonField("age")}
+        - email: String {JsonField("email_address")}
+        - password: String {JsonIgnore}
+        - company: Company {JsonField("company")}
+        - children: List<Person> {JsonField("children")}
+        - parent: Person {JsonField("parent")}
+        + Person()
+        + Person(String, int)
+        + Person(String, int, String)
+        + Person(String, int, Company)
+        + getName(): String
+        + setName(String): void
+        + getAge(): int
+        + setAge(int): void
+        + getEmail(): String
+        + setEmail(String): void
+        + getCompany(): Company
+        + setCompany(Company): void
+        + getChildren(): List<Person>
+        + setChildren(List<Person>): void
+        + getParent(): Person
+        + setParent(Person): void
+        + addChild(Person): void
+        + removeChild(Person): void
+        + equals(Object): boolean
+        + hashCode(): int
+        + toString(): String
+    }
+    
+    class Company {
+        - name: String {JsonField("company_name")}
+        - address: String {JsonField("address")}
+        - employees: List<Person> {JsonField("employees")}
+        - departments: List<Department> {JsonField("departments")}
+        - foundedYear: Integer {JsonField("founded_year")}
+        - revenue: double {JsonIgnore}
+        + Company()
+        + Company(String)
+        + Company(String, String)
+        + Company(String, String, Integer)
+        + getName(): String
+        + setName(String): void
+        + getAddress(): String
+        + setAddress(String): void
+        + getEmployees(): List<Person>
+        + setEmployees(List<Person>): void
+        + getDepartments(): List<Department>
+        + setDepartments(List<Department>): void
+        + getFoundedYear(): Integer
+        + setFoundedYear(Integer): void
+        + getRevenue(): double
+        + setRevenue(double): void
+        + addEmployee(Person): void
+        + removeEmployee(Person): void
+        + addDepartment(Department): void
+        + removeDepartment(Department): void
+        + getTotalEmployeeCount(): int
+        + findDepartmentByName(String): Department
+        + equals(Object): boolean
+        + hashCode(): int
+        + toString(): String
+    }
+    
+    class Department {
+        - name: String {JsonField("dept_name")}
+        - manager: Person {JsonField("manager")}
+        - employees: List<Person> {JsonField("employees")}
+        - company: Company {JsonField("company")}
+        - budget: Double {JsonField("budget")}
+        - projects: String[] {JsonField("projects")}
+        - departmentCode: int {JsonIgnore}
+        + Department()
+        + Department(String)
+        + Department(String, Person)
+        + Department(String, Person, Company)
+        + getName(): String
+        + setName(String): void
+        + getManager(): Person
+        + setManager(Person): void
+        + getEmployees(): List<Person>
+        + setEmployees(List<Person>): void
+        + getCompany(): Company
+        + setCompany(Company): void
+        + getBudget(): Double
+        + setBudget(Double): void
+        + getProjects(): String[]
+        + setProjects(String[]): void
+        + getDepartmentCode(): int
+        + setDepartmentCode(int): void
+        + addEmployee(Person): void
+        + removeEmployee(Person): void
+        + addProject(String): void
+        + removeProject(String): void
+        + getTeamSize(): int
+        + hasEmployee(Person): boolean
+        + equals(Object): boolean
+        + hashCode(): int
+        + toString(): String
+    }
+}
+
+package "Application Layer" <<folder>> {
+    class Main {
+        + {static} main(String[]): void
+        - {static} testBasicSerialization(): void
+        - {static} testReferenceSerialization(): void
+        - {static} testArraySerialization(): void
+        - {static} testCircularReferencePrevention(): void
+        - {static} testDeserializationByClassName(): void
+        - {static} testComplexObjectGraph(): void
+    }
+}
+
+' Связи наследования
+JsonException <|-- SerializationException
+JsonException <|-- DeserializationException  
+JsonException <|-- CircularReferenceException
+
+' Связи композиции (черный ромбик)
+JsonSerializer *-- ReferenceTracker : "владеет"
+JsonDeserializer *-- ReferenceTracker : "владеет"
+Person *-- "0..*" Person : "дети"
+Company *-- "0..*" Person : "сотрудники"
+Company *-- "0..*" Department : "отделы"
+Department *-- "0..*" Person : "сотрудники"
+
+' Связи ассоциации (простая стрелка)
+Person --> Company : "работает в"
+Person --> Person : "родитель"
+Department --> Person : "менеджер"
+Department --> Company : "принадлежит"
+
+' Связи зависимости (пунктирная стрелка)
+JsonSerializer ..> JsonException : "использует"
+JsonDeserializer ..> JsonException : "использует"
+ReferenceTracker ..> JsonException : "использует"
+Main ..> JsonSerializer : "использует"
+Main ..> JsonDeserializer : "использует"
+Main ..> Person : "создает"
+Main ..> Company : "создает"
+Main ..> Department : "создает"
+
+' Использование аннотаций
+Person ..> JsonSerializable : "аннотирован"
+Person ..> JsonField : "использует"
+Person ..> JsonIgnore : "использует"
+Company ..> JsonSerializable : "аннотирован"
+Company ..> JsonField : "использует"
+Company ..> JsonIgnore : "использует"
+Department ..> JsonSerializable : "аннотирован"
+Department ..> JsonField : "использует"
+Department ..> JsonIgnore : "использует"
+
+' Рефлексия (показываем использование Java Reflection API)
+JsonSerializer ..> "java.lang.reflect.Field" : "использует рефлексию"
+JsonSerializer ..> "java.lang.Class" : "анализирует классы"
+JsonDeserializer ..> "java.lang.reflect.Constructor" : "создает объекты"
+JsonDeserializer ..> "java.lang.reflect.Type" : "определяет типы"
+
+' Заметки
+note top of JsonSerializer : "Основной сериализатор\n• Рефлексия для анализа полей\n• Обработка аннотаций\n• Поддержка ссылок"
+note top of JsonDeserializer : "Десериализатор\n• Создание объектов через рефлексию\n• Восстановление ссылок\n• Обработка generics"
+note top of ReferenceTracker : "Трекер ссылок\n• Предотвращение циклов\n• $id и $ref в JSON\n• IdentityHashMap для точности"
+note right of Person : "Тестовая модель\n• Аннотации JsonField\n• Циклические ссылки\n• Коллекции объектов"
+
+' Группировка связанных классов
+together {
+    class JsonSerializer
+    class JsonDeserializer
+    class ReferenceTracker
+}
+
+together {
+    class Person
+    class Company
+    class Department
+}
+
+@enduml
