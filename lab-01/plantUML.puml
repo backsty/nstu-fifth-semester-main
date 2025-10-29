@@ -1,0 +1,210 @@
+@startuml TournamentTableArchitecture
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam packageStyle rectangle
+
+' Добавляем Java стандартные классы
+package "Java Standard Library" {
+    abstract class JFrame
+    abstract class JPanel  
+    abstract class JPopupMenu
+    interface Comparable<T>
+    interface List<T>
+    interface Map<K,V>
+}
+
+package "pw.ns2030" <<application>> {
+    
+    class Main <<entry point>> {
+        - config: Properties
+        + {static} main(String[]): void
+        + {static} createIcon(String, int): FlatSVGIcon
+        + {static} getConfiguration(): Properties
+        - {static} setupSystemProperties(): void
+        - {static} setupLookAndFeel(): void
+        - {static} createFallbackSVGIcon(): FlatSVGIcon
+    }
+
+    package "ui" <<presentation>> {
+        class MainFrame {
+            - config: Properties
+            - tournament: Tournament
+            - tablePanel: TournamentTablePanel
+            - controlPanel: JPanel
+            - statisticsPanel: JPanel
+            - statusBar: JLabel
+            - splitPane: JSplitPane
+            + createNewTournament(int): void
+            + updateUI(): void
+            + showDetailedStatistics(): void
+            - setupComponents(): void
+            - setupLayout(): void
+            --
+            + inner class TournamentChangeListener
+        }
+
+        class TournamentTablePanel {
+            - tournament: Tournament
+            - resultFields: JTextField[][]
+            - teamNameFields: JTextField[]
+            - contextMenu: TournamentContextMenu
+            - fieldToPosition: Map<JTextField, Point>
+            + createResultField(int, int): JTextField
+            + updateFieldAppearance(JTextField): void
+            + showContextMenu(): void
+            - initializeTable(): void
+            - setupValidation(): void
+            --
+            - static class ScoreDocumentFilter
+        }
+
+        class TournamentContextMenu {
+            - tournament: Tournament
+            - homeTeamIndex: int
+            - awayTeamIndex: int
+            - isTeamHeader: boolean
+            + showForMatchCell(int, int, int, int, Component): void
+            + showForTeamHeader(int, int, int, Component): void
+            + showTeamStatistics(): void
+            - updateMenuForMatchCell(): void
+            - updateMenuForTeamHeader(): void
+        }
+    }
+
+    package "model" <<business>> {
+        class Tournament {
+            + {static} MIN_TEAMS: int = 3
+            + {static} MAX_TEAMS: int = 20
+            - teamCount: int
+            - teams: List<Team>
+            - results: GameResult[][]
+            - listeners: List<TournamentListener>
+            - needsResort: boolean
+            + setMatchResult(int, int, int, int): void
+            + clearMatchResult(int, int): void
+            + getSortedTable(): List<Team>
+            + addTournamentListener(TournamentListener): void
+            + getCompletionPercentage(): double
+            - notifyMatchResultChanged(): void
+            - notifyTableResorted(): void
+            --
+            + interface TournamentListener
+        }
+
+        class Team {
+            - id: int
+            - name: String
+            - totalPoints: int
+            - matchesPlayed: int
+            - wins: int
+            - draws: int
+            - losses: int
+            - goalsFor: int
+            - goalsAgainst: int
+            - position: int
+            + addMatchResult(int, int, int): void
+            + removeMatchResult(int, int, int): void
+            + getGoalDifference(): int
+            + compareTo(Team): int
+            + isLeader(): boolean
+            + getWinPercentage(): double
+        }
+
+        class GameResult <<value object>> {
+            - homeScore: int
+            - awayScore: int
+            - isPlayed: boolean
+            + getHomePoints(): int
+            + getAwayPoints(): int
+            + createReverseResult(): GameResult
+            + getFormattedResult(): String
+            + isDraw(): boolean
+            + isHomeWin(): boolean
+            + isAwayWin(): boolean
+        }
+
+        interface TournamentListener <<observer>> {
+            + onMatchResultChanged(int, int, GameResult): void
+            + onTeamNameChanged(int, String): void
+            + onTableResorted(List<Team>): void
+        }
+    }
+
+    package "utils" <<utility>> {
+        class TableValidator <<utility>> {
+            + {static} validateScoreString(String): ValidationResult
+            + {static} validateTeamName(String): ValidationResult
+            + {static} validateTournamentIntegrity(Tournament): List<String>
+            + {static} validateTeamNameUniqueness(Tournament, int, String): ValidationResult
+            --
+            + static class ValidationResult
+        }
+
+        class ScoreCalculator <<utility>> {
+            + {static} POINTS_FOR_WIN: int = 3
+            + {static} POINTS_FOR_DRAW: int = 1
+            + {static} POINTS_FOR_LOSS: int = 0
+            + {static} calculateTournamentStatistics(Tournament): Map
+            + {static} canBecomeLeader(Tournament, int): boolean
+            + {static} calculateMaxPossiblePoints(Tournament, int): int
+            + {static} calculateCompletionPercentage(Tournament): double
+        }
+
+        class ValidationResult <<value object>> {
+            - valid: boolean
+            - errorMessage: String
+            + {static} success(): ValidationResult
+            + {static} error(String): ValidationResult
+            + isValid(): boolean
+            + getErrorMessage(): String
+        }
+    }
+}
+
+' Наследование от Java классов
+MainFrame --|> JFrame : extends
+TournamentTablePanel --|> JPanel : extends  
+TournamentContextMenu --|> JPopupMenu : extends
+
+' Связи композиции (черный ромбик)
+MainFrame *-- Tournament : "создает и владеет"
+MainFrame *-- TournamentTablePanel : "создает и владеет"
+Tournament *-- "3..20" Team : "содержит команды"
+Tournament *-- "n²-n" GameResult : "матрица результатов"
+TournamentTablePanel *-- TournamentContextMenu : "создает меню"
+TableValidator *-- ValidationResult : "создает результаты"
+
+' Связи агрегации (белый ромбик) 
+Tournament o-- "1..*" TournamentListener : "содержит слушателей"
+
+' Связи ассоциации (простая стрелка)
+TournamentTablePanel --> Tournament : "использует"
+TournamentContextMenu --> Tournament : "работает с"
+Tournament --> List : "использует для команд"
+Tournament --> Map : "использует для позиций"
+
+' Связи зависимости (пунктирная стрелка)
+Main ..> MainFrame : "создает"
+MainFrame ..> TableValidator : "использует"
+MainFrame ..> ScoreCalculator : "использует"
+TournamentTablePanel ..> TableValidator : "валидация"
+TournamentContextMenu ..> ScoreCalculator : "статистика"
+
+' Связи реализации (пунктирная стрелка с треугольником)
+MainFrame ..|> TournamentListener : "реализует"
+TournamentTablePanel ..|> TournamentListener : "реализует"
+Team ..|> Comparable : "для сортировки"
+
+' Вложенные элементы
+Tournament +-- TournamentListener : "определяет интерфейс"
+TableValidator +-- ValidationResult : "вложенный класс"
+
+' Примечания
+note top of Main : "Entry Point\n• Настройка системы\n• Фабрика иконок\n• Конфигурация"
+note top of Tournament : "Business Core\n• Симметричное заполнение\n• Observer Pattern\n• Автоматическая статистика"
+note top of TournamentTablePanel : "UI Component\n• Двумерная таблица\n• Цветовое кодирование\n• Валидация ввода"
+note right of GameResult : "Value Object\n• Immutable результат\n• Автоматические очки\n• Симметричное создание"
+
+@enduml
