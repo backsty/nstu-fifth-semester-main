@@ -1,0 +1,389 @@
+@startuml LevelIndicatorArchitecture
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam packageStyle rectangle
+
+title Индикатор уровня с системой событий и накоплением данных
+
+package "Component Layer" <<folder>> {
+    class LevelIndicator {
+        - config: LevelIndicatorConfig
+        - storage: LevelDataStorage
+        - listeners: List<LevelDataListener>
+        - lastRepaintTime: AtomicLong
+        - lastStorageTime: AtomicLong
+        - lastListenerTime: AtomicLong
+        - repaintScheduled: AtomicBoolean
+        - currentValue: volatile double
+        - currentZone: volatile LevelZone
+        - pendingValue: volatile double
+        - hasPendingValue: volatile boolean
+        - showValue: boolean
+        - showScale: boolean
+        - showZoneBorders: boolean
+        + LevelIndicator()
+        + LevelIndicator(LevelIndicatorConfig)
+        + setValue(double): void
+        + getValue(): double
+        + getCurrentZone(): LevelZone
+        + getConfig(): LevelIndicatorConfig
+        + getAccumulatedData(): List<LevelData>
+        + getStatistics(): StorageStatistics
+        + clearData(): void
+        + addLevelDataListener(LevelDataListener): void
+        + removeLevelDataListener(LevelDataListener): void
+        + removeAllListeners(): void
+        + getListenerCount(): int
+        + setShowValue(boolean): void
+        + setShowScale(boolean): void
+        + setShowZoneBorders(boolean): void
+        # paintComponent(Graphics): void
+        - scheduleRepaint(): void
+        - drawZones(Graphics2D, int, int, int, int): void
+        - drawLevel(Graphics2D, int, int, int, int): void
+        - drawZoneBorders(Graphics2D, int, int, int, int): void
+        - drawScale(Graphics2D, int, int, int, int): void
+        - drawValueText(Graphics2D, int, int, int, int): void
+        - drawBorder(Graphics2D, int, int, int, int): void
+        - fireDataUpdateEvent(double, double, LevelZone, LevelZone): void
+    }
+    
+    class LevelIndicatorConfig {
+        - minValue: double
+        - maxValue: double
+        - criticalLow: double
+        - criticalHigh: double
+        - warningLow: double
+        - warningHigh: double
+        - LevelIndicatorConfig(Builder)
+        + getMinValue(): double
+        + getMaxValue(): double
+        + getCriticalLow(): double
+        + getCriticalHigh(): double
+        + getWarningLow(): double
+        + getWarningHigh(): double
+        + getRange(): double
+        + determineZone(double): LevelZone
+        + isInRange(double): boolean
+        + normalize(double): double
+        + {static} createDefault(): LevelIndicatorConfig
+        + {static} fromRange(double, double): LevelIndicatorConfig
+        + toString(): String
+    }
+    
+    class "LevelIndicatorConfig.Builder" as ConfigBuilder {
+        - minValue: double
+        - maxValue: double
+        - criticalLow: double
+        - criticalHigh: double
+        - warningLow: double
+        - warningHigh: double
+        + setMinValue(double): Builder
+        + setMaxValue(double): Builder
+        + setCriticalLow(double): Builder
+        + setCriticalHigh(double): Builder
+        + setWarningLow(double): Builder
+        + setWarningHigh(double): Builder
+        + setCriticalRange(double, double): Builder
+        + setWarningRange(double, double): Builder
+        + build(): LevelIndicatorConfig
+        - validateConfiguration(): void
+    }
+    
+    enum LevelZone {
+        NORMAL("Нормальный", GREEN)
+        WARNING("Предупреждение", YELLOW)
+        CRITICAL("Авария", RED)
+        --
+        - displayName: String
+        - color: Color
+        --
+        + getDisplayName(): String
+        + getColor(): Color
+        + getDarkerColor(): Color
+        + getLighterColor(): Color
+        + isCritical(): boolean
+        + isWarning(): boolean
+        + isNormal(): boolean
+        + getSeverityLevel(): int
+        + toString(): String
+    }
+}
+
+package "Model Layer" <<folder>> {
+    class LevelData {
+        - timestamp: LocalDateTime
+        - value: double
+        - zone: LevelZone
+        + LevelData(double, LevelZone)
+        + LevelData(double, LevelZone, LocalDateTime)
+        + getTimestamp(): LocalDateTime
+        + getValue(): double
+        + getZone(): LevelZone
+        + getFormattedTimestamp(): String
+        + isCritical(): boolean
+        + isWarning(): boolean
+        + isNormal(): boolean
+        + getTimeDifferenceMillis(LevelData): long
+        + getValueDifference(LevelData): double
+        + withValue(double, LevelZone): LevelData
+        + withCurrentTimestamp(): LevelData
+        + equals(Object): boolean
+        + hashCode(): int
+        + toString(): String
+    }
+    
+    class LevelDataStorage {
+        - dataHistory: List<LevelData>
+        - maxSize: int
+        - autoCleanup: boolean
+        - minIntervalMs: long
+        - lastAddedTime: LocalDateTime
+        + LevelDataStorage()
+        + LevelDataStorage(int, boolean, long)
+        + addData(LevelData): boolean
+        + getData(): List<LevelData>
+        + getData(LocalDateTime, LocalDateTime): List<LevelData>
+        + getLastN(int): List<LevelData>
+        + getLatest(): LevelData
+        + clear(): void
+        + size(): int
+        + isEmpty(): boolean
+        + getStatistics(): StorageStatistics
+        + getDataByZone(LevelZone): List<LevelData>
+        + removeOlderThan(LocalDateTime): int
+    }
+    
+    class "LevelDataStorage.StorageStatistics" as StorageStatistics {
+        - totalCount: int
+        - average: double
+        - min: double
+        - max: double
+        - normalCount: int
+        - warningCount: int
+        - criticalCount: int
+        + getTotalCount(): int
+        + getAverage(): double
+        + getMin(): double
+        + getMax(): double
+        + getNormalCount(): int
+        + getWarningCount(): int
+        + getCriticalCount(): int
+        + getNormalPercentage(): double
+        + getWarningPercentage(): double
+        + getCriticalPercentage(): double
+        + toString(): String
+    }
+}
+
+package "Listener Layer" <<folder>> {
+    interface LevelDataListener {
+        + {abstract} onLevelDataUpdate(LevelChangeEvent): void
+    }
+    
+    class LevelChangeEvent {
+        - oldValue: double
+        - newValue: double
+        - oldZone: LevelZone
+        - newZone: LevelZone
+        - timestamp: LocalDateTime
+        + LevelChangeEvent(Object, double, double, LevelZone, LevelZone)
+        + LevelChangeEvent(Object, double, double, LevelZone, LevelZone, LocalDateTime)
+        + getOldValue(): double
+        + getNewValue(): double
+        + getOldZone(): LevelZone
+        + getNewZone(): LevelZone
+        + getTimestamp(): LocalDateTime
+        + getValueChange(): double
+        + hasZoneChanged(): boolean
+        + hasValueChanged(): boolean
+        + isWorsening(): boolean
+        + isImproving(): boolean
+        + isCritical(): boolean
+        + isWarning(): boolean
+        + isNormal(): boolean
+        + getDirection(): ChangeDirection
+        + toString(): String
+    }
+    
+    enum "LevelChangeEvent.ChangeDirection" as ChangeDirection {
+        INCREASING("Возрастание")
+        DECREASING("Убывание")
+        STABLE("Стабильно")
+        --
+        - displayName: String
+        --
+        + getDisplayName(): String
+        + toString(): String
+    }
+}
+
+package "Demo Layer" <<folder>> {
+    class LevelIndicatorDemo {
+        - indicator: LevelIndicator
+        - simulator: DataSimulator
+        - controlPanel: ControlPanel
+        + LevelIndicatorDemo()
+        - initComponents(): void
+        - setupLayout(): void
+        - setupMenuBar(): void
+        - createInfoPanel(): JPanel
+        - createZoneLabel(String, Color): JLabel
+        - exportData(): void
+        - showAbout(): void
+        + {static} main(String[]): void
+    }
+    
+    class ControlPanel {
+        - indicator: LevelIndicator
+        - simulator: DataSimulator
+        - parentFrame: JFrame
+        - isUpdatingSlider: AtomicBoolean
+        - valueSlider: JSlider
+        - valueLabel: JLabel
+        - startStopButton: JButton
+        - frequencySpinner: JSpinner
+        - smoothCheckBox: JCheckBox
+        - statusLabel: JLabel
+        + ControlPanel(LevelIndicator, DataSimulator, JFrame)
+        - initComponents(): void
+        - createManualControlPanel(): JPanel
+        - createSimulatorPanel(): JPanel
+        - createPresetPanel(): JPanel
+        - createStatusPanel(): JPanel
+        - createPresetButton(String): JButton
+        - createCenteredButtonPanel(JButton): JPanel
+        - setupListeners(): void
+        - toggleSimulator(): void
+        - updateStartStopButton(): void
+        - setValueAndUpdate(double): void
+        - updateValueLabel(double): void
+        - showStatistics(): void
+    }
+    
+    class DataSimulator {
+        - random: Random
+        - lock: Object
+        - timer: Timer
+        - currentValue: double
+        - minValue: double
+        - maxValue: double
+        - minChange: double
+        - maxChange: double
+        - updateInterval: int
+        - smoothTransition: boolean
+        - spikeChance: double
+        - listener: DataUpdateListener
+        + DataSimulator()
+        + DataSimulator(double, double, double)
+        + setDataUpdateListener(DataUpdateListener): void
+        + setFrequency(int): void
+        + setChangeRange(double, double): void
+        + setSmoothTransition(boolean): void
+        + setSpikeChance(double): void
+        + start(): void
+        + stop(): void
+        + isRunning(): boolean
+        + getCurrentValue(): double
+        + setCurrentValue(double): void
+        + reset(): void
+        - startTimer(): void
+        - stopTimer(): void
+        - generateNextValue(): void
+        - clamp(double, double, double): double
+        - notifyListener(): void
+        - notifyListener(double): void
+    }
+    
+    interface "DataSimulator.DataUpdateListener" as DataUpdateListener {
+        + {abstract} onDataUpdate(double): void
+    }
+}
+
+package "Application Layer" <<folder>> {
+    class Main {
+        + {static} main(String[]): void
+        - {static} configureLookAndFeel(): void
+        - {static} showErrorDialog(Exception): void
+    }
+}
+
+' Наследование и реализация интерфейсов
+LevelIndicator -up-|> JPanel
+LevelChangeEvent -up-|> EventObject
+LevelChangeEvent +-- ChangeDirection
+LevelIndicatorConfig +-- ConfigBuilder
+LevelDataStorage +-- StorageStatistics
+
+' Композиция (черный ромбик)
+LevelIndicator *-- LevelIndicatorConfig : "владеет"
+LevelIndicator *-- LevelDataStorage : "владеет"
+LevelIndicator *-- "0..*" LevelDataListener : "управляет"
+LevelDataStorage *-- "0..*" LevelData : "хранит"
+ControlPanel *-- LevelIndicator : "управляет"
+ControlPanel *-- DataSimulator : "использует"
+LevelIndicatorDemo *-- LevelIndicator : "содержит"
+LevelIndicatorDemo *-- DataSimulator : "содержит"
+LevelIndicatorDemo *-- ControlPanel : "содержит"
+
+' Ассоциации
+LevelData --> LevelZone : "использует"
+LevelIndicatorConfig --> LevelZone : "определяет зоны"
+LevelChangeEvent --> LevelZone : "содержит информацию"
+DataSimulator --> DataUpdateListener : "уведомляет"
+
+' Зависимости (пунктир)
+LevelIndicator ..> LevelChangeEvent : "создает"
+LevelIndicator ..> LevelData : "создает"
+LevelDataListener ..> LevelChangeEvent : "получает"
+ConfigBuilder ..> LevelIndicatorConfig : "создает"
+ControlPanel ..> LevelDataListener : "реализует"
+Main ..> LevelIndicatorDemo : "создает"
+
+' Паттерны проектирования
+note top of LevelIndicator : "Компонент (JPanel)\n• Observer для слушателей\n• Throttling для производительности\n• Thread-safe накопление данных"
+note top of LevelIndicatorConfig : "Immutable конфигурация\n• Builder pattern\n• Валидация параметров\n• Factory методы"
+note top of LevelDataStorage : "Ring Buffer\n• CopyOnWriteArrayList\n• Throttling записи\n• Агрегированная статистика"
+note top of DataSimulator : "Генератор данных\n• Timer для периодичности\n• Mean reversion\n• Spike simulation"
+note right of LevelDataListener : "@FunctionalInterface\nCallback для Observer"
+note right of LevelChangeEvent : "Event Object\n• Дельта изменений\n• Предикаты состояния\n• Направление тренда"
+
+' Группировка связанных классов
+together {
+    class LevelIndicator
+    class LevelIndicatorConfig
+    class ConfigBuilder
+    enum LevelZone
+}
+
+together {
+    class LevelData
+    class LevelDataStorage
+    class StorageStatistics
+}
+
+together {
+    interface LevelDataListener
+    class LevelChangeEvent
+    enum ChangeDirection
+}
+
+together {
+    class LevelIndicatorDemo
+    class ControlPanel
+    class DataSimulator
+    interface DataUpdateListener
+}
+
+' Примечания к ключевым взаимодействиям
+note "Observer Pattern:\n1. LevelIndicator - Observable\n2. LevelDataListener - Observer\n3. LevelChangeEvent - Event" as N1
+note "Builder Pattern:\nFluent API для создания\nнеизменяемой конфигурации" as N2
+note "MVC Pattern:\nModel - LevelIndicator\nView - paintComponent()\nController - ControlPanel" as N3
+
+N1 .. LevelDataListener
+N2 .. ConfigBuilder
+N3 .. ControlPanel
+
+@enduml
