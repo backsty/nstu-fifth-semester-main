@@ -7,15 +7,13 @@ import pw.ns2030.model.*;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Главное демонстрационное окно системы потребителей энергии.
- * Объединяет контроллер системы, панель потребления и панели устройств.
- */
 public class PowerSystemDemo extends JFrame {
     private PowerSystemController powerSystem;
     private PowerMeterPanel powerMeterPanel;
@@ -36,14 +34,12 @@ public class PowerSystemDemo extends JFrame {
         setupMenuBar();
         addWindowCloseListener();
         
-        // Запуск системы
         powerSystem.start();
         
         pack();
-        setMinimumSize(new Dimension(900, 600));
+        setMinimumSize(new Dimension(900, 700));
         setLocationRelativeTo(null);
         
-        // Добавляем начальные устройства для демонстрации
         addInitialDevices();
     }
 
@@ -57,17 +53,23 @@ public class PowerSystemDemo extends JFrame {
     }
 
     private void setupLayout() {
-        // Левая панель - общее потребление
         add(powerMeterPanel, BorderLayout.WEST);
+
+        devicesPanel = new JPanel();
+        devicesPanel.setLayout(new BoxLayout(devicesPanel, BoxLayout.Y_AXIS));
+        devicesPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        // Центральная панель - список устройств в scrollpane
         JScrollPane scrollPane = new JScrollPane(devicesPanel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("🔌 Подключенные устройства"));
+        scrollPane.setPreferredSize(new Dimension(330, 700));
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Подключенные устройства"));
+        
+        scrollPane.getVerticalScrollBar().setUnitIncrement(30);
+        scrollPane.getVerticalScrollBar().setBlockIncrement(90);
+        
         add(scrollPane, BorderLayout.CENTER);
         
-        // Нижняя панель - кнопки управления
         JPanel controlPanel = createControlPanel();
         add(controlPanel, BorderLayout.SOUTH);
     }
@@ -75,42 +77,18 @@ public class PowerSystemDemo extends JFrame {
     private JPanel createControlPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         
-        Font emojiFont = new Font("Segoe UI Emoji", Font.BOLD, 12);
+        Font buttonFont = new Font("Arial", Font.BOLD, 12);
         
-        JButton addKettleBtn = new JButton("➕ Добавить чайник");
-        addKettleBtn.setFont(emojiFont);
-        addKettleBtn.setBackground(new Color(33, 150, 243));  // Синий
-        addKettleBtn.setForeground(Color.WHITE);
-        addKettleBtn.setOpaque(true);
-        addKettleBtn.setBorderPainted(false);
-        addKettleBtn.setFocusPainted(false);
+        JButton addKettleBtn = createStyledButton("+ Добавить чайник", new Color(33, 150, 243), new Color(25, 118, 210), buttonFont);
         addKettleBtn.addActionListener(e -> addKettle());
         
-        JButton addLampBtn = new JButton("➕ Добавить лампу");
-        addLampBtn.setFont(emojiFont);
-        addLampBtn.setBackground(new Color(156, 39, 176));  // Фиолетовый
-        addLampBtn.setForeground(Color.WHITE);
-        addLampBtn.setOpaque(true);
-        addLampBtn.setBorderPainted(false);
-        addLampBtn.setFocusPainted(false);
+        JButton addLampBtn = createStyledButton("+ Добавить лампу", new Color(156, 39, 176), new Color(123, 31, 162), buttonFont);
         addLampBtn.addActionListener(e -> addLamp());
         
-        JButton addComputerBtn = new JButton("➕ Добавить компьютер");
-        addComputerBtn.setFont(emojiFont);
-        addComputerBtn.setBackground(new Color(0, 150, 136));  // Бирюзовый
-        addComputerBtn.setForeground(Color.WHITE);
-        addComputerBtn.setOpaque(true);
-        addComputerBtn.setBorderPainted(false);
-        addComputerBtn.setFocusPainted(false);
+        JButton addComputerBtn = createStyledButton("+ Добавить компьютер", new Color(0, 150, 136), new Color(0, 121, 107), buttonFont);
         addComputerBtn.addActionListener(e -> addComputer());
         
-        JButton restorePowerBtn = new JButton("🔌 Восстановить питание");
-        restorePowerBtn.setFont(emojiFont);
-        restorePowerBtn.setBackground(new Color(255, 193, 7));  // Жёлтый
-        restorePowerBtn.setForeground(Color.BLACK);
-        restorePowerBtn.setOpaque(true);
-        restorePowerBtn.setBorderPainted(false);
-        restorePowerBtn.setFocusPainted(false);
+        JButton restorePowerBtn = createStyledButton("Восстановить питание", new Color(76, 175, 80), new Color(56, 142, 60), buttonFont);
         restorePowerBtn.addActionListener(e -> powerSystem.restorePower());
         
         panel.add(addKettleBtn);
@@ -121,16 +99,40 @@ public class PowerSystemDemo extends JFrame {
         return panel;
     }
 
+    private JButton createStyledButton(String text, Color bgColor, Color hoverColor, Font font) {
+        JButton button = new JButton(text);
+        button.setFont(font);
+        button.setBackground(bgColor);
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setOpaque(true);
+        button.setPreferredSize(new Dimension(200, 35));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(hoverColor);
+            }
+            
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(bgColor);
+            }
+        });
+        
+        return button;
+    }
+
     private void setupMenuBar() {
         JMenuBar menuBar = new JMenuBar();
         
-        // Меню "Файл"
         JMenu fileMenu = new JMenu("Файл");
         JMenuItem exitItem = new JMenuItem("Выход");
         exitItem.addActionListener(e -> closeApplication());
         fileMenu.add(exitItem);
         
-        // Меню "Устройства"
         JMenu devicesMenu = new JMenu("Устройства");
         JMenuItem addKettleItem = new JMenuItem("Добавить чайник");
         addKettleItem.addActionListener(e -> addKettle());
@@ -147,7 +149,6 @@ public class PowerSystemDemo extends JFrame {
         devicesMenu.addSeparator();
         devicesMenu.add(removeAllItem);
         
-        // Меню "Система"
         JMenu systemMenu = new JMenu("Система");
         JMenuItem restorePowerItem = new JMenuItem("Восстановить питание");
         restorePowerItem.addActionListener(e -> powerSystem.restorePower());
@@ -157,7 +158,6 @@ public class PowerSystemDemo extends JFrame {
         systemMenu.add(restorePowerItem);
         systemMenu.add(statsItem);
         
-        // Меню "Справка"
         JMenu helpMenu = new JMenu("Справка");
         JMenuItem aboutItem = new JMenuItem("О программе");
         aboutItem.addActionListener(e -> showAbout());
@@ -210,11 +210,13 @@ public class PowerSystemDemo extends JFrame {
     private void addDevice(ApplianceController controller) {
         ApplianceControlPanel panel = new ApplianceControlPanel(controller);
         
-        // Подписка на событие удаления устройства
         panel.addPropertyChangeListener("removeDevice", evt -> {
             ApplianceController ctrlToRemove = (ApplianceController) evt.getNewValue();
             removeDevice(panel, ctrlToRemove);
         });
+
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 140));
         
         devicePanels.add(panel);
         devicesPanel.add(panel);
@@ -227,12 +229,40 @@ public class PowerSystemDemo extends JFrame {
     }
 
     private void removeDevice(ApplianceControlPanel panel, ApplianceController controller) {
+        panel.cleanup();
+        
+        // Удаляем панель И следующий за ней strut
+        int index = getComponentIndex(devicesPanel, panel);
+        if (index >= 0) {
+            devicesPanel.remove(panel);
+            
+            // Удаляем следующий компонент если это strut
+            if (index < devicesPanel.getComponentCount()) {
+                Component nextComponent = devicesPanel.getComponent(index);
+                if (nextComponent instanceof Box.Filler) {
+                    devicesPanel.remove(nextComponent);
+                }
+            }
+        }
+        
         devicePanels.remove(panel);
-        devicesPanel.remove(panel);
         powerSystem.removeDevice(controller);
         
         devicesPanel.revalidate();
         devicesPanel.repaint();
+    }
+
+    /**
+     * Поиск индекса компонента в контейнере.
+     */
+    private int getComponentIndex(Container container, Component component) {
+        Component[] components = container.getComponents();
+        for (int i = 0; i < components.length; i++) {
+            if (components[i] == component) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void removeAllDevices() {
@@ -265,7 +295,7 @@ public class PowerSystemDemo extends JFrame {
             (powerSystem.getTotalConsumption() / powerSystem.getMaxPower()) * 100.0,
             powerSystem.getDeviceCount(),
             (int) powerSystem.getDevices().stream().filter(Appliance::isOn).count(),
-            powerSystem.isPowerAvailable() ? "✅ Включено" : "❌ Отключено"
+            powerSystem.isPowerAvailable() ? "[V] Включено" : "[X] Отключено"
         );
         
         JOptionPane.showMessageDialog(
@@ -283,11 +313,11 @@ public class PowerSystemDemo extends JFrame {
             "Студент: Шаламов А.Е.\n" +
             "Группа: АВТ-343\n\n" +
             "Возможности:\n" +
-            "• Динамическое добавление устройств\n" +
-            "• Мониторинг потребления в реальном времени\n" +
-            "• Автоматическая защита от перегрузки\n" +
-            "• Модели поведения устройств\n" +
-            "• ИБП с моделью батареи\n\n" +
+            "- Динамическое добавление устройств\n" +
+            "- Мониторинг потребления в реальном времени\n" +
+            "- Автоматическая защита от перегрузки\n" +
+            "- Модели поведения устройств\n" +
+            "- ИБП с моделью батареи\n\n" +
             "(c) 2025 НГТУ";
         
         JOptionPane.showMessageDialog(

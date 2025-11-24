@@ -40,7 +40,6 @@ replay_pid*
 ~WRL*.tmp
 
 # Output directories
-out/
 target/
 bin/
 

@@ -2,11 +2,11 @@ package pw.ns2030;
 
 import pw.ns2030.demo.PowerSystemDemo;
 
-import javax.swing.*;
+import com.formdev.flatlaf.FlatIntelliJLaf;
 
-/**
- * Точка входа приложения - запуск системы потребителей энергии.
- */
+import javax.swing.*;
+import java.awt.*;
+
 public class Main {
     public static void main(String[] args) {
         configureLookAndFeel();
@@ -29,14 +29,47 @@ public class Main {
 
     private static void configureLookAndFeel() {
         try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            // Установка FlatLaf IntelliJ тема (современный светлый интерфейс)
+            FlatIntelliJLaf.setup();
             
-            UIManager.put("Button.font", new java.awt.Font("Arial", java.awt.Font.PLAIN, 12));
-            UIManager.put("Label.font", new java.awt.Font("Arial", java.awt.Font.PLAIN, 12));
-            UIManager.put("TextField.font", new java.awt.Font("Arial", java.awt.Font.PLAIN, 12));
+            // Скругление углов кнопок и компонентов
+            UIManager.put("Button.arc", 8);
+            UIManager.put("Component.arc", 8);
+            UIManager.put("TextComponent.arc", 8);
+            UIManager.put("ScrollBar.width", 12);
+            UIManager.put("TabbedPane.tabHeight", 32);
+            
+            // Современные шрифты
+            Font segoeUI = new Font("Segoe UI", Font.PLAIN, 12);
+            Font segoeUIBold = new Font("Segoe UI", Font.BOLD, 12);
+            
+            UIManager.put("Button.font", segoeUI);
+            UIManager.put("Label.font", segoeUI);
+            UIManager.put("TextField.font", segoeUI);
+            UIManager.put("Menu.font", segoeUI);
+            UIManager.put("MenuItem.font", segoeUI);
+            UIManager.put("TitledBorder.font", segoeUIBold);
+            
+            // Отступы в меню
+            UIManager.put("MenuItem.margin", new Insets(4, 6, 4, 6));
+            UIManager.put("Menu.margin", new Insets(2, 6, 2, 6));
+            
+            // Плавная прокрутка
+            UIManager.put("ScrollPane.smoothScrolling", true);
+            
+            // Цвет акцентов (синий)
+            UIManager.put("Component.accentColor", new Color(33, 150, 243));
             
         } catch (Exception e) {
-            System.err.println("Не удалось установить системный Look and Feel");
+            System.err.println("Не удалось установить FlatLaf Look and Feel");
+            e.printStackTrace();
+            
+            // Запасной вариант - системная тема
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
     }
 

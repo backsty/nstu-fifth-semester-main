@@ -5,13 +5,17 @@ package pw.ns2030.model;
  * Моделирует нагрев и остывание воды.
  */
 public class Kettle extends Appliance {
-    private static final double ROOM_TEMPERATURE = 20.0; // °C
-    private static final double BOILING_POINT = 100.0;   // °C
+    private static final double ROOM_TEMPERATURE = 20.0;
+    private static final double BOILING_POINT = 100.0;
     
-    private volatile double temperature; // Текущая температура воды (°C)
+    // Скорости изменения температуры (градусов в секунду)
+    private static final double HEATING_RATE = 8.0;    // Нагрев: 20°C → 100°C за ~10 секунд
+    private static final double COOLING_RATE = 2.0;    // Остывание: 100°C → 20°C за ~40 секунд
+    
+    private volatile double temperature;
 
     public Kettle(String id, String name) {
-        super(id, name, 2000.0); // 2000 Вт
+        super(id, name, 2000.0);
         this.temperature = ROOM_TEMPERATURE;
     }
 
@@ -41,7 +45,6 @@ public class Kettle extends Appliance {
 
     @Override
     public double getCurrentPower() {
-        // Потребляет энергию только при нагреве
         return (state == PowerState.HEATING && powerAvailable) ? ratedPower : 0.0;
     }
 
@@ -55,38 +58,32 @@ public class Kettle extends Appliance {
 
     @Override
     public void onPowerRestored() {
-        // Чайник НЕ включается автоматически (безопасность)
         System.out.println(name + ": Питание восстановлено");
     }
 
     /**
-     * Обновление температуры (вызывается контроллером).
+     * Обновление температуры с линейной моделью нагрева/остывания.
      * 
      * @param deltaTime время с последнего обновления (секунды)
      */
     public void updateTemperature(double deltaTime) {
         if (state == PowerState.HEATING && powerAvailable) {
-            // Нагрев: экспоненциальное приближение к 100°C
-            // T(t) = T_room + (T_boil - T_room) * (1 - e^(-k*t))
-            double k = 0.01; // Коэффициент теплопередачи
-            temperature = ROOM_TEMPERATURE + 
-                         (BOILING_POINT - ROOM_TEMPERATURE) * 
-                         (1 - Math.exp(-k * deltaTime));
-
-            // Автоматическое отключение при закипании
+            // Линейный нагрев с фиксированной скоростью
+            temperature += HEATING_RATE * deltaTime;
+            
+            // Ограничение температурой кипения
             if (temperature >= BOILING_POINT) {
                 temperature = BOILING_POINT;
-                turnOff(); // Автоотключение
+                turnOff();
                 System.out.println(name + ": Вода закипела! Автоотключение");
             }
-
+            
         } else if (state == PowerState.COOLING) {
-            // Остывание: экспоненциальное приближение к комнатной температуре
-            temperature = ROOM_TEMPERATURE + 
-                         (temperature - ROOM_TEMPERATURE) * 0.95;
-
-            // Полное остывание
-            if (Math.abs(temperature - ROOM_TEMPERATURE) < 0.5) {
+            // Линейное остывание
+            temperature -= COOLING_RATE * deltaTime;
+            
+            // Ограничение комнатной температурой
+            if (temperature <= ROOM_TEMPERATURE) {
                 temperature = ROOM_TEMPERATURE;
                 state = PowerState.OFF;
             }

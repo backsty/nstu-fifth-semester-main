@@ -58,7 +58,8 @@ public class PowerSystemController implements Runnable {
         }
         
         System.out.println("[PowerSystem] Добавлено устройство: " + controller.getAppliance().getName());
-        updateConsumption();
+        // ✅ ИСПРАВЛЕНИЕ #5: Убран дублирующий вызов updateConsumption()
+        // Система сама обнаружит изменение через checkSystemState()
     }
 
     /**

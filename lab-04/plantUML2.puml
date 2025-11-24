@@ -1,0 +1,128 @@
+@startuml EventsAndListenersLayer
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+title Часть 2: События и слушатели
+
+package "Event Layer" {
+    abstract class PowerEvent {
+        - timestamp: LocalDateTime
+        - powerState: PowerState
+        --
+        + getTimestamp(): LocalDateTime
+        + {abstract} getEventType(): String
+    }
+    
+    class ConsumptionEvent {
+        - totalPower: double
+        - previousPower: double
+        - activeDevices: int
+        --
+        + getPowerChange(): double
+        + getPercentageChange(): double
+        + isIncreasing(): boolean
+    }
+    
+    class OverloadEvent {
+        - currentPower: double
+        - maxPower: double
+        - culprits: List<String>
+        --
+        + getOverloadAmount(): double
+        + getOverloadPercent(): double
+        + getSeverity(): OverloadSeverity
+    }
+    
+    enum OverloadSeverity {
+        LOW, MODERATE
+        HIGH, SEVERE
+    }
+    
+    class BatteryLevelEvent {
+        - deviceId: String
+        - batteryLevel: double
+        - isCharging: boolean
+        --
+        + isLowBattery(): boolean
+        + getBatteryZone(): BatteryZone
+    }
+    
+    enum BatteryZone {
+        GOOD, FAIR
+        LOW, CRITICAL
+    }
+}
+
+package "Listener Layer" {
+    interface PowerSystemListener {
+        + onConsumptionChanged(event): void
+        + onOverload(event): void
+        + onPowerStateChanged(event): void
+        + onBatteryLevelChanged(event): void
+    }
+    
+    interface LevelDataListener {
+        + onLevelDataUpdate(event): void
+    }
+    
+    class LevelChangeEvent {
+        - oldValue: double
+        - newValue: double
+        - oldZone: LevelZone
+        - newZone: LevelZone
+        --
+        + getValueChange(): double
+        + hasZoneChanged(): boolean
+        + isWorsening(): boolean
+        + getDirection(): ChangeDirection
+    }
+    
+    enum ChangeDirection {
+        INCREASING
+        DECREASING
+        STABLE
+    }
+}
+
+' Наследование Events
+PowerEvent -up-|> EventObject
+ConsumptionEvent -up-|> PowerEvent
+OverloadEvent -up-|> PowerEvent
+BatteryLevelEvent -up-|> PowerEvent
+OverloadEvent +-- OverloadSeverity
+BatteryLevelEvent +-- BatteryZone
+
+LevelChangeEvent -up-|> EventObject
+LevelChangeEvent +-- ChangeDirection
+
+' Связи Listeners
+PowerSystemListener <.. ConsumptionEvent : "получает"
+PowerSystemListener <.. OverloadEvent : "получает"
+PowerSystemListener <.. BatteryLevelEvent : "получает"
+PowerSystemListener <.. PowerEvent : "получает"
+LevelDataListener <.. LevelChangeEvent : "получает"
+
+' Аннотации
+note top of PowerEvent
+  **Event Hierarchy**
+  Базовый абстрактный
+  класс для всех событий
+end note
+
+note right of PowerSystemListener
+  **Observer Pattern**
+  @FunctionalInterface
+  Callback для системных событий
+end note
+
+note right of LevelDataListener
+  **Observer Pattern**
+  @FunctionalInterface
+  Callback для индикатора
+end note
+
+footer "Часть 2 из 3"
+
+@enduml

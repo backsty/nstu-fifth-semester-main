@@ -5,14 +5,18 @@ package pw.ns2030.model;
  * Автоматически переключается между сетью и батареей.
  */
 public class Computer extends Appliance {
-    private static final double BATTERY_CAPACITY_MINUTES = 30.0; // Емкость батареи
+    // ИЗМЕНЕНО: Уменьшено время для наглядности (было 30 минут, стало 2 минуты)
+    private static final double BATTERY_CAPACITY_MINUTES = 2.0;
     
-    private volatile double batteryLevel; // Уровень заряда (0-100%)
-    private volatile boolean isCharging;   // Режим зарядки
+    // ИЗМЕНЕНО: Время зарядки (было 60 минут, стало 4 минуты)
+    private static final double BATTERY_CHARGE_MINUTES = 4.0;
+    
+    private volatile double batteryLevel;
+    private volatile boolean isCharging;
 
     public Computer(String id, String name) {
-        super(id, name, 300.0); // 300 Вт
-        this.batteryLevel = 100.0; // Полная зарядка
+        super(id, name, 300.0);
+        this.batteryLevel = 100.0;
         this.isCharging = false;
     }
 
@@ -42,7 +46,6 @@ public class Computer extends Appliance {
 
     @Override
     public double getCurrentPower() {
-        // Потребляет от сети только при работе от сети
         return (state == PowerState.ON_GRID && powerAvailable) ? ratedPower : 0.0;
     }
 
@@ -74,14 +77,14 @@ public class Computer extends Appliance {
     }
 
     /**
-     * Обновление уровня батареи (вызывается контроллером).
+     * Обновление уровня батареи.
      * 
      * @param deltaTime время с последнего обновления (секунды)
      */
     public void updateBattery(double deltaTime) {
         if (state == PowerState.ON_BATTERY) {
-            // Разряд батареи: 100% → 0% за 30 минут
-            double drainRate = 100.0 / (BATTERY_CAPACITY_MINUTES * 60.0); // % в секунду
+            // Разряд батареи: 100% → 0% за BATTERY_CAPACITY_MINUTES
+            double drainRate = 100.0 / (BATTERY_CAPACITY_MINUTES * 60.0);
             batteryLevel -= drainRate * deltaTime;
 
             if (batteryLevel <= 0) {
@@ -91,8 +94,8 @@ public class Computer extends Appliance {
             }
 
         } else if (isCharging && powerAvailable && batteryLevel < 100.0) {
-            // Зарядка батареи: 0% → 100% за 60 минут
-            double chargeRate = 100.0 / (60.0 * 60.0); // % в секунду
+            // Зарядка батареи: 0% → 100% за BATTERY_CHARGE_MINUTES
+            double chargeRate = 100.0 / (BATTERY_CHARGE_MINUTES * 60.0);
             batteryLevel += chargeRate * deltaTime;
 
             if (batteryLevel >= 100.0) {

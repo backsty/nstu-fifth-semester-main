@@ -1,0 +1,140 @@
+@startuml ModelAndControllerLayer
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+title Часть 1: Модель данных и контроллеры
+
+package "Model Layer" {
+    enum PowerState {
+        OFF, ON_GRID, ON_BATTERY
+        HEATING, COOLING
+        --
+        + getDisplayName(): String
+    }
+    
+    abstract class Appliance {
+        # id: String
+        # name: String
+        # ratedPower: double
+        # state: PowerState
+        --
+        + {abstract} turnOn(): void
+        + {abstract} turnOff(): void
+        + {abstract} getCurrentPower(): double
+        + {abstract} onPowerLoss(): void
+        + {abstract} onPowerRestored(): void
+        + isOn(): boolean
+    }
+    
+    class Kettle {
+        - temperature: double
+        --
+        + updateTemperature(double): void
+        + getTemperature(): double
+        + isBoiling(): boolean
+    }
+    
+    class Lamp {
+        + turnOn(): void
+        + turnOff(): void
+    }
+    
+    class Computer {
+        - batteryLevel: double
+        - isCharging: boolean
+        --
+        + updateBattery(double): void
+        + getBatteryLevel(): double
+        + isOnBattery(): boolean
+    }
+}
+
+package "Controller Layer" {
+    abstract class ApplianceController {
+        # appliance: Appliance
+        # updateInterval: int
+        # running: AtomicBoolean
+        --
+        + start(): void
+        + stop(): void
+        + run(): void
+        # {abstract} updateState(double): void
+        # notifyStateChanged(): void
+    }
+    
+    interface ApplianceStateListener {
+        + onStateChanged(event): void
+    }
+    
+    class KettleController {
+        + updateState(double): void
+    }
+    
+    class LampController {
+        + updateState(double): void
+    }
+    
+    class ComputerController {
+        + updateState(double): void
+        + handlePowerLoss(): void
+    }
+    
+    class PowerSystemController {
+        - {static} MAX_POWER: double = 5000.0
+        - controllers: List<Controller>
+        --
+        + addDevice(controller): void
+        + removeDevice(controller): void
+        + start(): void
+        + shutdown(): void
+        - checkSystemState(): void
+        - handleOverload(power): void
+    }
+}
+
+' Связи Model
+Appliance --> PowerState
+Kettle -up-|> Appliance
+Lamp -up-|> Appliance
+Computer -up-|> Appliance
+
+' Связи Controller
+ApplianceController -up-|> Runnable
+ApplianceController +-- ApplianceStateListener
+KettleController -up-|> ApplianceController
+LampController -up-|> ApplianceController
+ComputerController -up-|> ApplianceController
+PowerSystemController -up-|> Runnable
+
+' Связи Model-Controller
+ApplianceController *-- Appliance : "управляет"
+KettleController *-- Kettle
+LampController *-- Lamp
+ComputerController *-- Computer
+PowerSystemController *-- "0..*" ApplianceController
+
+' Аннотации
+note top of Appliance
+  **Template Method Pattern**
+  Абстрактный базовый класс
+  для всех устройств
+end note
+
+note top of PowerSystemController
+  **Central Controller**
+  • Управление устройствами
+  • Мониторинг перегрузок
+  • Многопоточность
+end note
+
+note right of ApplianceController
+  **Runnable + Observer**
+  Throttling обновлений
+  Hook-методы
+end note
+
+footer "Часть 1 из 3"
+
+@enduml

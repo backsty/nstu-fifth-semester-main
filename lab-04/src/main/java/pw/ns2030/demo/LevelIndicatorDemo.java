@@ -30,7 +30,7 @@ public class LevelIndicatorDemo extends JFrame {
         setupMenuBar();
 
         pack(); // Подгоняем размер под содержимое
-        setMinimumSize(new Dimension(600, 500));
+        setMinimumSize(new Dimension(600, 600));
         setLocationRelativeTo(null);
         setResizable(true);
     }

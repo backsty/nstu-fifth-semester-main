@@ -15,65 +15,45 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Компонент визуализации уровня жидкости/давления с трехзонной индикацией.
- * Расширяет JPanel для встраивания в любой Swing-контейнер.
- * 
- * Архитектурные решения:
- * - Throttling перерисовки (16ms = 60 FPS) для плавности при частых обновлениях
- * - CopyOnWriteArrayList для слушателей (lock-free чтение в paintComponent)
- * - Отложенное сохранение в storage (100ms) для снижения нагрузки на память
- * - Atomic переменные для thread-safe работы с симулятором
- * 
- * Визуальные элементы:
- * - Цветовые зоны (норма/предупреждение/авария)
- * - Текущий уровень с затемнением
- * - Боковая шкала значений
- * - Числовое отображение внизу
+ * Компонент визуализации уровня с трехзонной индикацией.
+ * Поддерживает throttling для оптимизации при частых обновлениях.
  */
 public class LevelIndicator extends JPanel {
-    // Константы размеров и отступов
     private static final int DEFAULT_WIDTH = 80;
     private static final int DEFAULT_HEIGHT = 400;
+    private static final int MIN_HEIGHT = 200;
     private static final int PADDING = 10;
     private static final int SCALE_WIDTH = 40;
     
-    // Кэширование графических объектов для производительности
     private static final Font VALUE_FONT = new Font("Arial", Font.BOLD, 16);
     private static final Font SCALE_FONT = new Font("Arial", Font.PLAIN, 10);
-    private static final Color LEVEL_OVERLAY = new Color(0, 0, 0, 100);  // Полупрозрачное затемнение
+    private static final Color LEVEL_OVERLAY = new Color(0, 0, 0, 100);
     private static final BasicStroke BORDER_STROKE = new BasicStroke(2);
     private static final BasicStroke ZONE_BORDER_STROKE = new BasicStroke(1, BasicStroke.CAP_BUTT, 
                                                                            BasicStroke.JOIN_BEVEL, 0, new float[]{5}, 0);
     
-    // Throttling для оптимизации производительности
-    private static final long REPAINT_THROTTLE_MS = 16;      // ~60 FPS
-    private static final long STORAGE_THROTTLE_MS = 100;     // 10 записей/сек
-    private static final long LISTENER_THROTTLE_MS = 50;     // 20 уведомлений/сек
+    private static final long REPAINT_THROTTLE_MS = 16;
+    private static final long STORAGE_THROTTLE_MS = 100;
+    private static final long LISTENER_THROTTLE_MS = 50;
 
-    private final LevelIndicatorConfig config;
+    private volatile LevelIndicatorConfig config;
     private final LevelDataStorage storage;
-    private final List<LevelDataListener> listeners;  // Thread-safe через CopyOnWriteArrayList
+    private final List<LevelDataListener> listeners;
     
-    // Throttling механизм
     private final AtomicLong lastRepaintTime = new AtomicLong(0);
     private final AtomicLong lastStorageTime = new AtomicLong(0);
     private final AtomicLong lastListenerTime = new AtomicLong(0);
     private final AtomicBoolean repaintScheduled = new AtomicBoolean(false);
 
-    // Текущее состояние (volatile для видимости между потоками)
     private volatile double currentValue;
     private volatile LevelZone currentZone;
     private volatile double pendingValue;
     private volatile boolean hasPendingValue = false;
     
-    // Флаги отображения элементов
     private boolean showValue = true;
     private boolean showScale = true;
     private boolean showZoneBorders = true;
 
-    /**
-     * Конструктор с явной конфигурацией.
-     */
     public LevelIndicator(LevelIndicatorConfig config) {
         if (config == null) {
             throw new IllegalArgumentException("Конфигурация не может быть null");
@@ -81,39 +61,51 @@ public class LevelIndicator extends JPanel {
 
         this.config = config;
         this.storage = new LevelDataStorage();
-        this.listeners = new CopyOnWriteArrayList<>();  // Lock-free для paintComponent - Список слушателей
+        this.listeners = new CopyOnWriteArrayList<>();
         this.currentValue = config.getMinValue();
         this.currentZone = config.determineZone(currentValue);
 
         setPreferredSize(new Dimension(DEFAULT_WIDTH + SCALE_WIDTH, DEFAULT_HEIGHT));
         setBackground(new Color(240, 240, 240));
         setOpaque(true);
-        setDoubleBuffered(true);  // Swing автоматически включает, но явно указываем
+        setDoubleBuffered(true);
     }
 
-    /**
-     * Конструктор с настройками по умолчанию.
-     */
     public LevelIndicator() {
         this(LevelIndicatorConfig.createDefault());
     }
 
-    /**
-     * Установка нового значения с автоматическим определением зоны.
-     * Применяется throttling для оптимизации при быстрых изменениях.
-     */
+    public void updateConfig(LevelIndicatorConfig newConfig) {
+        if (newConfig == null) {
+            throw new IllegalArgumentException("Новая конфигурация не может быть null");
+        }
+
+        LevelIndicatorConfig oldConfig = this.config;
+        this.config = newConfig;
+
+        LevelZone oldZone = this.currentZone;
+        this.currentZone = newConfig.determineZone(this.currentValue);
+
+        if (!newConfig.isInRange(this.currentValue)) {
+            double clampedValue = Math.max(newConfig.getMinValue(), 
+                                          Math.min(newConfig.getMaxValue(), this.currentValue));
+            setValue(clampedValue);
+        } else if (oldZone != this.currentZone) {
+            fireDataUpdateEvent(this.currentValue, this.currentValue, oldZone, this.currentZone);
+        }
+
+        storage.addData(new LevelData(this.currentValue, this.currentZone));
+        SwingUtilities.invokeLater(this::repaint);
+    }
+
     public void setValue(double value) {
-        // Clamp в допустимый диапазон
-        // Шаг 1: Ограничиваем значение диапазоном [0, 100]
         if (!config.isInRange(value)) {
             value = Math.max(config.getMinValue(), Math.min(config.getMaxValue(), value));
         }
 
-        // Шаг 2: Сохраняем старые значения для события
         double oldValue = this.currentValue;
         LevelZone oldZone = this.currentZone;
 
-        // Шаг 3: Обновляем текущие значения
         this.currentValue = value;
         this.currentZone = config.determineZone(value);
         this.pendingValue = value;
@@ -121,39 +113,30 @@ public class LevelIndicator extends JPanel {
 
         long currentTime = System.currentTimeMillis();
 
-        // Шаг 4: THROTTLED сохранение в storage (не чаще раза в 100ms)
         if (currentTime - lastStorageTime.get() >= STORAGE_THROTTLE_MS) {
             LevelData data = new LevelData(value, currentZone);
             storage.addData(data);
             lastStorageTime.set(currentTime);
         }
 
-        // Шаг 5: THROTTLED уведомление слушателей (не чаще раза в 50ms)
         if (currentTime - lastListenerTime.get() >= LISTENER_THROTTLE_MS) {
             fireDataUpdateEvent(oldValue, value, oldZone, currentZone);
             lastListenerTime.set(currentTime);
         }
 
-        // Шаг 6: THROTTLED перерисовка (не чаще 60 FPS = 16ms)
         scheduleRepaint();
     }
 
-    /**
-     * Отложенная перерисовка с ограничением частоты (60 FPS).
-     * Использует Timer для плавности анимации.
-     */
     private void scheduleRepaint() {
         if (repaintScheduled.compareAndSet(false, true)) {
             long currentTime = System.currentTimeMillis();
             long timeSinceLastRepaint = currentTime - lastRepaintTime.get();
             
             if (timeSinceLastRepaint >= REPAINT_THROTTLE_MS) {
-                // Достаточно времени прошло - рисуем сразу
                 lastRepaintTime.set(currentTime);
                 repaintScheduled.set(false);
                 repaint();
             } else {
-                // Откладываем до следующего кадра
                 Timer timer = new Timer((int)(REPAINT_THROTTLE_MS - timeSinceLastRepaint), e -> {
                     lastRepaintTime.set(System.currentTimeMillis());
                     repaintScheduled.set(false);
@@ -181,9 +164,6 @@ public class LevelIndicator extends JPanel {
         return storage.getData();
     }
 
-    /**
-     * Получение статистики с гарантией записи последнего значения.
-     */
     public LevelDataStorage.StorageStatistics getStatistics() {
         if (hasPendingValue) {
             LevelData data = new LevelData(pendingValue, config.determineZone(pendingValue));
@@ -215,7 +195,6 @@ public class LevelIndicator extends JPanel {
         return listeners.size();
     }
 
-    // Методы управления отображением элементов
     public void setShowValue(boolean showValue) {
         this.showValue = showValue;
         repaint();
@@ -231,16 +210,11 @@ public class LevelIndicator extends JPanel {
         repaint();
     }
 
-    /**
-     * Основной метод отрисовки - вызывается Swing при необходимости.
-     * Оптимизирован для скорости (RENDER_SPEED вместо RENDER_QUALITY).
-     */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g.create();
 
-        // Настройка рендеринга: приоритет скорости для плавных обновлений
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
@@ -249,13 +223,11 @@ public class LevelIndicator extends JPanel {
         int width = getWidth();
         int height = getHeight();
 
-        // Расчет области индикатора с учетом шкалы
         int indicatorX = PADDING + (showScale ? SCALE_WIDTH : 0);
         int indicatorY = PADDING;
         int indicatorWidth = width - indicatorX - PADDING;
         int indicatorHeight = height - 2 * PADDING;
 
-        // Отрисовка элементов в порядке наложения (от фона к переднему плану)
         drawZones(g2d, indicatorX, indicatorY, indicatorWidth, indicatorHeight);
         drawLevel(g2d, indicatorX, indicatorY, indicatorWidth, indicatorHeight);
 
@@ -276,64 +248,78 @@ public class LevelIndicator extends JPanel {
         g2d.dispose();
     }
 
-    /**
-     * Отрисовка цветовых зон (фон индикатора).
-     * Заполняет прямоугольники снизу вверх согласно границам зон.
-     */
     private void drawZones(Graphics2D g2d, int x, int y, int width, int height) {
         double range = config.getRange();
-
-        // Преобразование границ зон в пиксельные координаты
-        double criticalLowHeight = ((config.getCriticalLow() - config.getMinValue()) / range) * height;
-        double warningLowHeight = ((config.getWarningLow() - config.getMinValue()) / range) * height;
-        double warningHighHeight = ((config.getWarningHigh() - config.getMinValue()) / range) * height;
-        double criticalHighHeight = ((config.getCriticalHigh() - config.getMinValue()) / range) * height;
-
-        // Отрисовка зон снизу вверх (критическая -> предупреждение -> норма -> предупреждение -> критическая)
-        g2d.setColor(LevelZone.CRITICAL.getColor());
-        g2d.fillRect(x, y, width, (int) criticalLowHeight);
-
-        g2d.setColor(LevelZone.WARNING.getColor());
-        g2d.fillRect(x, y + (int) criticalLowHeight, width, (int) (warningLowHeight - criticalLowHeight));
-
-        g2d.setColor(LevelZone.NORMAL.getColor());
-        g2d.fillRect(x, y + (int) warningLowHeight, width, (int) (warningHighHeight - warningLowHeight));
-
-        g2d.setColor(LevelZone.WARNING.getColor());
-        g2d.fillRect(x, y + (int) warningHighHeight, width, (int) (criticalHighHeight - warningHighHeight));
-
-        g2d.setColor(LevelZone.CRITICAL.getColor());
-        g2d.fillRect(x, y + (int) criticalHighHeight, width, height - (int) criticalHighHeight);
+        
+        class ZoneBoundary implements Comparable<ZoneBoundary> {
+            double value;
+            LevelZone zone;
+            
+            ZoneBoundary(double value, LevelZone zone) {
+                this.value = value;
+                this.zone = zone;
+            }
+            
+            @Override
+            public int compareTo(ZoneBoundary other) {
+                return Double.compare(this.value, other.value);
+            }
+        }
+        
+        List<ZoneBoundary> boundaries = new java.util.ArrayList<>();
+        boundaries.add(new ZoneBoundary(config.getMinValue(), null));
+        boundaries.add(new ZoneBoundary(config.getCriticalLow(), null));
+        boundaries.add(new ZoneBoundary(config.getWarningLow(), null));
+        boundaries.add(new ZoneBoundary(config.getWarningHigh(), null));
+        boundaries.add(new ZoneBoundary(config.getCriticalHigh(), null));
+        boundaries.add(new ZoneBoundary(config.getMaxValue(), null));
+        
+        java.util.Collections.sort(boundaries);
+        
+        List<ZoneBoundary> uniqueBoundaries = new java.util.ArrayList<>();
+        for (int i = 0; i < boundaries.size(); i++) {
+            if (i == 0 || Math.abs(boundaries.get(i).value - boundaries.get(i-1).value) > 0.001) {
+                uniqueBoundaries.add(boundaries.get(i));
+            }
+        }
+        
+        for (int i = 0; i < uniqueBoundaries.size() - 1; i++) {
+            double bottomValue = uniqueBoundaries.get(i).value;
+            double topValue = uniqueBoundaries.get(i + 1).value;
+            double midValue = (bottomValue + topValue) / 2.0;
+            
+            LevelZone zone = config.determineZone(midValue);
+            
+            int bottomY = y + height - (int)(((bottomValue - config.getMinValue()) / range) * height);
+            int topY = y + height - (int)(((topValue - config.getMinValue()) / range) * height);
+            int segmentHeight = bottomY - topY;
+            
+            if (segmentHeight > 0) {
+                g2d.setColor(zone.getColor());
+                g2d.fillRect(x, topY, width, segmentHeight);
+            }
+        }
     }
 
-    /**
-     * Отрисовка текущего уровня - затемненная область снизу + линия границы.
-     */
     private void drawLevel(Graphics2D g2d, int x, int y, int width, int height) {
         double normalized = config.normalize(currentValue);
         int levelHeight = (int) (normalized * height);
         int levelY = y + height - levelHeight;
 
-        // Затемнение заполненной области
         g2d.setColor(LEVEL_OVERLAY);
         g2d.fillRect(x, levelY, width, levelHeight);
 
-        // Линия текущего уровня (акцентная)
         g2d.setColor(currentZone.getDarkerColor());
         g2d.setStroke(BORDER_STROKE);
         g2d.drawLine(x, levelY, x + width, levelY);
     }
 
-    /**
-     * Отрисовка границ зон пунктирными линиями.
-     */
     private void drawZoneBorders(Graphics2D g2d, int x, int y, int width, int height) {
         g2d.setColor(Color.DARK_GRAY);
         g2d.setStroke(ZONE_BORDER_STROKE);
 
         double range = config.getRange();
         
-        // Вычисление Y-координат границ (от низа)
         int criticalLowY = y + height - (int) (((config.getCriticalLow() - config.getMinValue()) / range) * height);
         int warningLowY = y + height - (int) (((config.getWarningLow() - config.getMinValue()) / range) * height);
         int warningHighY = y + height - (int) (((config.getWarningHigh() - config.getMinValue()) / range) * height);
@@ -346,33 +332,78 @@ public class LevelIndicator extends JPanel {
     }
 
     /**
-     * Отрисовка боковой шкалы значений с метками.
+     * Отрисовка шкалы с автоматическим включением границ зон.
+     * Отображает min, max, равномерные деления И границы критических/warning зон.
      */
     private void drawScale(Graphics2D g2d, int x, int y, int width, int height) {
         g2d.setColor(Color.DARK_GRAY);
         g2d.setFont(SCALE_FONT);
+        FontMetrics fm = g2d.getFontMetrics();
 
-        int divisions = 10;
+        // Собираем все важные значения для отображения
+        java.util.Set<Double> scaleValues = new java.util.TreeSet<>();
+        
+        // 1. Обязательные: минимум и максимум
+        scaleValues.add(config.getMinValue());
+        scaleValues.add(config.getMaxValue());
+        
+        // 2. Равномерные деления (стандартная сетка)
+        int divisions = 5;
         double step = config.getRange() / divisions;
-
-        for (int i = 0; i <= divisions; i++) {
-            double value = config.getMinValue() + (i * step);
-            int scaleY = y + height - (int) ((i / (double) divisions) * height);
-
-            // Короткая черточка шкалы
-            g2d.drawLine(x + width - 5, scaleY, x + width, scaleY);
-
-            // Числовая метка (выравнивание справа)
+        for (int i = 1; i < divisions; i++) {
+            scaleValues.add(config.getMinValue() + (step * i));
+        }
+        
+        // 3. Границы зон (если они не совпадают с уже добавленными)
+        scaleValues.add(config.getCriticalLow());
+        scaleValues.add(config.getCriticalHigh());
+        scaleValues.add(config.getWarningLow());
+        scaleValues.add(config.getWarningHigh());
+        
+        // Отрисовка всех меток
+        for (double value : scaleValues) {
+            // Y-координата метки (от низа вверх)
+            double valueRatio = (value - config.getMinValue()) / config.getRange();
+            int scaleY = y + height - (int) (valueRatio * height);
+            
+            // Форматирование значения
             String label = String.format("%.0f", value);
-            FontMetrics fm = g2d.getFontMetrics();
             int labelWidth = fm.stringWidth(label);
-            g2d.drawString(label, x + width - labelWidth - 8, scaleY + 4);
+            
+            // Позиция текста: выравнивание по правому краю
+            int labelX = x + width - labelWidth;
+            
+            // Вертикальное центрирование текста
+            int labelY = scaleY + (fm.getAscent() - fm.getDescent()) / 2;
+            
+            // Проверка наложения меток (минимальный отступ 12 пикселей)
+            boolean tooClose = false;
+            for (double other : scaleValues) {
+                if (other != value) {
+                    double otherRatio = (other - config.getMinValue()) / config.getRange();
+                    int otherY = y + height - (int) (otherRatio * height);
+                    if (Math.abs(scaleY - otherY) < 12 && Math.abs(value - other) > 0.01) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Рисуем метку только если не накладывается
+            if (!tooClose || value == config.getMinValue() || value == config.getMaxValue()) {
+                g2d.drawString(label, labelX, labelY);
+                
+                // Засечка (для границ зон - длиннее)
+                boolean isZoneBoundary = value == config.getCriticalLow() || 
+                                        value == config.getCriticalHigh() ||
+                                        value == config.getWarningLow() || 
+                                        value == config.getWarningHigh();
+                int tickLength = isZoneBoundary ? 8 : 5;
+                g2d.drawLine(x + width, scaleY, x + width + tickLength, scaleY);
+            }
         }
     }
 
-    /**
-     * Отрисовка числового значения под индикатором в рамке цвета зоны.
-     */
     private void drawValueText(Graphics2D g2d, int x, int y, int width, int height) {
         g2d.setFont(VALUE_FONT);
         String valueText = String.format("%.1f", currentValue);
@@ -384,33 +415,23 @@ public class LevelIndicator extends JPanel {
         int textX = x + (width - textWidth) / 2;
         int textY = y + height + textHeight + 5;
 
-        // Белый фон под текстом
         g2d.setColor(Color.WHITE);
         Rectangle2D rect = new Rectangle2D.Double(textX - 5, textY - textHeight + 5, textWidth + 10, textHeight);
         g2d.fill(rect);
 
-        // Рамка цвета текущей зоны
         g2d.setColor(currentZone.getColor());
         g2d.draw(rect);
 
-        // Сам текст
         g2d.setColor(Color.BLACK);
         g2d.drawString(valueText, textX, textY);
     }
 
-    /**
-     * Отрисовка рамки индикатора.
-     */
     private void drawBorder(Graphics2D g2d, int x, int y, int width, int height) {
         g2d.setColor(Color.DARK_GRAY);
         g2d.setStroke(BORDER_STROKE);
         g2d.drawRect(x, y, width, height);
     }
 
-    /**
-     * Уведомление слушателей об изменении состояния.
-     * Обработка ошибок предотвращает сбой при ошибке в одном слушателе.
-     */
     private void fireDataUpdateEvent(double oldValue, double newValue, LevelZone oldZone, LevelZone newZone) {
         if (listeners.isEmpty()) {
             return;
@@ -429,12 +450,26 @@ public class LevelIndicator extends JPanel {
 
     @Override
     public Dimension getPreferredSize() {
-        return new Dimension(DEFAULT_WIDTH + (showScale ? SCALE_WIDTH : 0), DEFAULT_HEIGHT);
+        Container parent = getParent();
+        if (parent != null) {
+            int parentHeight = parent.getHeight();
+            if (parentHeight > MIN_HEIGHT) {
+                int dynamicHeight = (int) (parentHeight * 0.9);
+                dynamicHeight = Math.max(MIN_HEIGHT, Math.min(dynamicHeight, DEFAULT_HEIGHT));
+                return new Dimension(DEFAULT_WIDTH + SCALE_WIDTH, dynamicHeight);
+            }
+        }
+        return new Dimension(DEFAULT_WIDTH + SCALE_WIDTH, DEFAULT_HEIGHT);
     }
 
     @Override
     public Dimension getMinimumSize() {
-        return new Dimension(60, 200);
+        return new Dimension(DEFAULT_WIDTH + SCALE_WIDTH, MIN_HEIGHT);
+    }
+
+    @Override
+    public Dimension getMaximumSize() {
+        return new Dimension(DEFAULT_WIDTH + SCALE_WIDTH, 600);
     }
 
     @Override

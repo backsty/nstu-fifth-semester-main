@@ -10,11 +10,6 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 
-/**
- * Панель отображения общего потребления энергии системы.
- * Использует LevelIndicator из л.р.3 для визуализации нагрузки.
- * Реагирует на события системы через паттерн Observer.
- */
 public class PowerMeterPanel extends JPanel implements PowerSystemListener {
     private final PowerSystemController powerSystem;
     private final LevelIndicator powerIndicator;
@@ -27,18 +22,11 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
     public PowerMeterPanel(PowerSystemController powerSystem) {
         this.powerSystem = powerSystem;
         
-        // Зоны нагрузки (от краев к центру):
-        // 0-500 Вт (0-10%) = КРИТИЧЕСКАЯ (слишком низкая нагрузка)
-        // 500-1000 Вт (10-20%) = ПРЕДУПРЕЖДЕНИЕ
-        // 1000-4000 Вт (20-80%) = НОРМА
-        // 4000-4500 Вт (80-90%) = ПРЕДУПРЕЖДЕНИЕ
-        // 4500-5000 Вт (90-100%) = КРИТИЧЕСКАЯ (перегрузка)
-        
         LevelIndicatorConfig config = new LevelIndicatorConfig.Builder()
             .setMinValue(0.0)
             .setMaxValue(5000.0)
-            .setCriticalRange(500.0, 4500.0)
-            .setWarningRange(1000.0, 4000.0)
+            .setCriticalRange(100.0, 4800.0)
+            .setWarningRange(500.0, 4000.0)
             .build();
         
         this.powerIndicator = new LevelIndicator(config);
@@ -47,26 +35,32 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
         initComponents();
         setupLayout();
         
-        // Подписка на события системы
         powerSystem.addListener(this);
     }
 
     private void initComponents() {
         setLayout(new BorderLayout(10, 10));
-        setBorder(new TitledBorder("📊 Общее потребление энергии"));
-        setPreferredSize(new Dimension(300, 600));
+        
+        TitledBorder border = BorderFactory.createTitledBorder("Общее потребление энергии");
+        border.setTitleFont(new Font("Arial", Font.BOLD, 12));
+        setBorder(border);
+        
+        setPreferredSize(new Dimension(300, 700));
+        
+        Font labelFont = new Font("Arial", Font.PLAIN, 12);
+        Font boldLabelFont = new Font("Arial", Font.BOLD, 14);
         
         statusLabel = new JLabel("Система готова", SwingConstants.CENTER);
-        statusLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        statusLabel.setFont(boldLabelFont);
         statusLabel.setForeground(new Color(76, 175, 80));
         
         consumptionLabel = new JLabel("0 Вт / 5000 Вт", SwingConstants.CENTER);
         consumptionLabel.setFont(new Font("Arial", Font.PLAIN, 16));
         
         devicesLabel = new JLabel("Устройств: 0 (активных: 0)", SwingConstants.CENTER);
-        devicesLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+        devicesLabel.setFont(labelFont);
         
-        powerStateLabel = new JLabel("✅ Питание в норме", SwingConstants.CENTER);
+        powerStateLabel = new JLabel("[V] Питание в норме", SwingConstants.CENTER);
         powerStateLabel.setFont(new Font("Arial", Font.BOLD, 12));
         powerStateLabel.setOpaque(true);
         powerStateLabel.setBackground(new Color(76, 175, 80));
@@ -74,7 +68,6 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
     }
 
     private void setupLayout() {
-        // Верхняя панель - статус
         JPanel topPanel = new JPanel(new GridLayout(4, 1, 5, 5));
         topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         topPanel.add(statusLabel);
@@ -82,11 +75,9 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
         topPanel.add(devicesLabel);
         topPanel.add(powerStateLabel);
         
-        // Центральная панель - индикатор
         JPanel centerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         centerPanel.add(powerIndicator);
         
-        // Нижняя панель - легенда
         JPanel legendPanel = createLegendPanel();
         
         add(topPanel, BorderLayout.NORTH);
@@ -101,9 +92,9 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
             BorderFactory.createEmptyBorder(5, 5, 5, 5)
         ));
 
-        JLabel normalLabel = createLegendLabel("● Норма: 1000-4000 Вт (20-80%)", new Color(76, 175, 80));
-        JLabel warningLabel = createLegendLabel("● Предупреждение: 500-1000, 4000-4500 Вт", new Color(255, 193, 7));
-        JLabel criticalLabel = createLegendLabel("● Опасно: 0-500, 4500-5000 Вт", new Color(244, 67, 54));
+        JLabel normalLabel = createLegendLabel("Норма: 500-4000 Вт (10-80%)", new Color(56, 142, 60));
+        JLabel warningLabel = createLegendLabel("Предупреждение: 100-500, 4000-4800 Вт", new Color(230, 170, 0));
+        JLabel criticalLabel = createLegendLabel("Критично: 0-100, 4800-5000 Вт", new Color(211, 47, 47));
         
         panel.add(normalLabel);
         panel.add(warningLabel);
@@ -114,37 +105,36 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
 
     private JLabel createLegendLabel(String text, Color color) {
         JLabel label = new JLabel(text);
-        label.setFont(new Font("Arial", Font.PLAIN, 11));
+        label.setFont(new Font("Arial", Font.BOLD, 11));
         label.setForeground(color);
         return label;
     }
 
-    // Реализация PowerSystemListener
-    
     @Override
     public void onConsumptionChanged(ConsumptionEvent event) {
         SwingUtilities.invokeLater(() -> {
             double totalPower = event.getTotalPower();
             int activeDevices = event.getActiveDevices();
             
-            // Обновление индикатора
             powerIndicator.setValue(totalPower);
-            
-            // Обновление текстовых меток
             consumptionLabel.setText(String.format("%.0f Вт / 5000 Вт", totalPower));
             devicesLabel.setText(String.format("Устройств: %d (активных: %d)", 
                 powerSystem.getDeviceCount(), activeDevices));
 
             double percentage = (totalPower / 5000.0) * 100.0;
-            if (percentage >= 90) {
-                statusLabel.setText("⚠️ КРИТИЧЕСКАЯ НАГРУЗКА!");
+            
+            if (percentage >= 96) {
+                statusLabel.setText("[!] КРИТИЧЕСКАЯ НАГРУЗКА!");
                 statusLabel.setForeground(new Color(244, 67, 54));
             } else if (percentage >= 80) {
-                statusLabel.setText("⚠ Высокая нагрузка");
+                statusLabel.setText("[!] Высокая нагрузка");
                 statusLabel.setForeground(new Color(255, 193, 7));
-            } else if (percentage <= 10) {
-                statusLabel.setText("⚠ Низкая нагрузка");
-                statusLabel.setForeground(new Color(255, 193, 7));
+            } else if (totalPower <= 0.1 && activeDevices == 0) {
+                statusLabel.setText("Система готова");
+                statusLabel.setForeground(new Color(76, 175, 80));
+            } else if (percentage < 10) {
+                statusLabel.setText("Низкая нагрузка");
+                statusLabel.setForeground(new Color(76, 175, 80));
             } else {
                 statusLabel.setText("Нагрузка в норме");
                 statusLabel.setForeground(new Color(76, 175, 80));
@@ -156,7 +146,7 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
     public void onOverload(OverloadEvent event) {
         SwingUtilities.invokeLater(() -> {
             String message = String.format(
-                "⚠️ ПЕРЕГРУЗКА СЕТИ!\n\n" +
+                "[!] ПЕРЕГРУЗКА СЕТИ!\n\n" +
                 "Текущее потребление: %.0f Вт\n" +
                 "Лимит системы: %.0f Вт\n" +
                 "Превышение: +%.0f Вт (+%.1f%%)\n\n" +
@@ -174,7 +164,7 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
                 JOptionPane.WARNING_MESSAGE
             );
             
-            statusLabel.setText("❌ ПЕРЕГРУЗКА!");
+            statusLabel.setText("[X] ПЕРЕГРУЗКА!");
             statusLabel.setForeground(Color.RED);
         });
     }
@@ -185,10 +175,10 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
             boolean available = powerSystem.isPowerAvailable();
             
             if (available) {
-                powerStateLabel.setText("✅ Питание в норме");
+                powerStateLabel.setText("[V] Питание в норме");
                 powerStateLabel.setBackground(new Color(76, 175, 80));
             } else {
-                powerStateLabel.setText("❌ Питание отключено");
+                powerStateLabel.setText("[X] Питание отключено");
                 powerStateLabel.setBackground(new Color(244, 67, 54));
             }
         });
@@ -196,12 +186,8 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
 
     @Override
     public void onBatteryLevelChanged(pw.ns2030.event.BatteryLevelEvent event) {
-        // Не используется в этой панели
     }
 
-    /**
-     * Отписка от событий при закрытии панели.
-     */
     public void cleanup() {
         powerSystem.removeListener(this);
     }

@@ -1,0 +1,156 @@
+@startuml UIComponentsAndDemo
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+title Часть 3: UI компоненты и приложение
+
+package "Component Layer" {
+    enum LevelZone {
+        NORMAL("Зелёный")
+        WARNING("Жёлтый")
+        CRITICAL("Красный")
+        --
+        + getColor(): Color
+        + isCritical(): boolean
+    }
+    
+    class LevelIndicatorConfig {
+        - minValue: double
+        - maxValue: double
+        - criticalLow/High: double
+        - warningLow/High: double
+        --
+        + determineZone(value): LevelZone
+        + normalize(value): double
+    }
+    
+    class ConfigBuilder {
+        + setMinValue(v): Builder
+        + setMaxValue(v): Builder
+        + setCriticalRange(l, h): Builder
+        + setWarningRange(l, h): Builder
+        + build(): Config
+    }
+    
+    class LevelIndicator {
+        - config: LevelIndicatorConfig
+        - storage: LevelDataStorage
+        - currentValue: double
+        - currentZone: LevelZone
+        --
+        + setValue(value): void
+        + updateConfig(config): void
+        + addLevelDataListener(l): void
+        # paintComponent(g): void
+    }
+    
+    class LevelData {
+        - timestamp: LocalDateTime
+        - value: double
+        - zone: LevelZone
+        --
+        + isCritical(): boolean
+    }
+    
+    class LevelDataStorage {
+        - dataHistory: List<LevelData>
+        - maxSize: int
+        --
+        + addData(data): boolean
+        + getStatistics(): Statistics
+    }
+    
+    class PowerMeterPanel {
+        - powerSystem: Controller
+        - powerIndicator: LevelIndicator
+        - statusLabel: JLabel
+        --
+        + onConsumptionChanged(e): void
+        + onOverload(e): void
+    }
+    
+    class ApplianceControlPanel {
+        - controller: ApplianceController
+        - toggleSwitch: ToggleSwitch
+        - stateLabel: JLabel
+        - toggleButton: JButton
+        --
+        - updateDeviceUI(): void
+        - updateToggleSwitch(): void
+    }
+    
+    class ToggleSwitch {
+        - onIcon: BufferedImage
+        - offIcon: BufferedImage
+        - state: boolean
+        --
+        + setState(state): void
+        # paintComponent(g): void
+    }
+}
+
+package "Demo Layer" {
+    class PowerSystemDemo {
+        - powerSystem: Controller
+        - powerMeterPanel: Panel
+        - devicesPanel: JPanel
+        --
+        - setupLayout(): void
+        - setupMenuBar(): void
+        - addKettle(): void
+        - addLamp(): void
+        - addComputer(): void
+    }
+    
+    class Main {
+        + {static} main(args): void
+    }
+}
+
+' Связи Component
+LevelIndicatorConfig +-- ConfigBuilder
+LevelIndicator -up-|> JPanel
+LevelIndicator *-- LevelIndicatorConfig
+LevelIndicator *-- LevelDataStorage
+LevelDataStorage *-- "0..*" LevelData
+LevelData --> LevelZone
+
+PowerMeterPanel -up-|> JPanel
+PowerMeterPanel *-- LevelIndicator
+ApplianceControlPanel -up-|> JPanel
+ApplianceControlPanel *-- ToggleSwitch
+ToggleSwitch -up-|> JPanel
+
+' Связи Demo
+PowerSystemDemo -up-|> JFrame
+PowerSystemDemo *-- PowerMeterPanel
+PowerSystemDemo *-- "0..*" ApplianceControlPanel
+Main ..> PowerSystemDemo : "создаёт"
+
+' Аннотации
+note top of LevelIndicator
+  **Component (JPanel)**
+  • Observer для слушателей
+  • Throttling перерисовки
+  • Ring Buffer накопление
+end note
+
+note right of LevelIndicatorConfig
+  **Immutable + Builder**
+  • Валидация параметров
+  • Factory методы
+  • Thread-safe
+end note
+
+note bottom of PowerSystemDemo
+  **Main Application**
+  • MVC архитектура
+  • FlatLaf Look&Feel
+  • Динамическое добавление устройств
+end note
+
+footer "Часть 3 из 3"
+
+@enduml

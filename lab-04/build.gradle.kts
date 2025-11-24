@@ -13,6 +13,10 @@ repositories {
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    
+    // FlatLaf - Современный Look & Feel
+    implementation("com.formdev:flatlaf:3.3")
+    implementation("com.formdev:flatlaf-intellij-themes:3.3")
 }
 
 application {
@@ -62,7 +66,7 @@ tasks.jar {
     manifest {
         attributes(
             "Main-Class" to "pw.ns2030.Main",
-            "Implementation-Title" to "Level Indicator",
+            "Implementation-Title" to "Power System",
             "Implementation-Version" to project.version
         )
     }
@@ -71,12 +75,12 @@ tasks.jar {
     
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
     
-    archiveFileName.set("level-indicator-${project.version}.jar")
+    archiveFileName.set("power-system-${project.version}.jar")
 }
 
 tasks.register<JavaExec>("demo") {
     group = "application"
-    description = "Запускает демонстрацию индикатора уровня"
+    description = "Запускает систему потребителей энергии"
     mainClass.set("pw.ns2030.Main")
     classpath = sourceSets["main"].runtimeClasspath
     systemProperty("file.encoding", "UTF-8")
