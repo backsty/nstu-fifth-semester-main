@@ -5,12 +5,8 @@ package pw.ns2030.model;
  * Автоматически переключается между сетью и батареей.
  */
 public class Computer extends Appliance {
-    // ИЗМЕНЕНО: Уменьшено время для наглядности (было 30 минут, стало 2 минуты)
     private static final double BATTERY_CAPACITY_MINUTES = 2.0;
-    
-    // ИЗМЕНЕНО: Время зарядки (было 60 минут, стало 4 минуты)
     private static final double BATTERY_CHARGE_MINUTES = 4.0;
-    
     private volatile double batteryLevel;
     private volatile boolean isCharging;
 

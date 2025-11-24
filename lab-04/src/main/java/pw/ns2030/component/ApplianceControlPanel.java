@@ -52,8 +52,7 @@ public class ApplianceControlPanel extends JPanel {
             border,
             BorderFactory.createEmptyBorder(5, 10, 5, 10)
         ));
-        
-        // ИСПРАВЛЕНО: Увеличена высота панели и убраны min/max размеры
+
         setPreferredSize(new Dimension(450, 130));
         
         stateLabel = new JLabel("Состояние: " + appliance.getState().getDisplayName());
@@ -102,8 +101,6 @@ public class ApplianceControlPanel extends JPanel {
     }
 
     private void setupLayout() {
-        // ИСПРАВЛЕНО: Правильное позиционирование всех элементов
-        
         // Левая часть: информация (растягивается)
         JPanel infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));

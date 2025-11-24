@@ -12,7 +12,7 @@ import javax.imageio.ImageIO;
  * Поддерживает пропорциональное масштабирование без искажений.
  */
 public class ToggleSwitch extends JPanel {
-    // ИСПРАВЛЕНО: Пропорции реальной иконки (примерно 2.5:1 - широкий овал)
+    // Пропорции реальной иконки (примерно 2.5:1 - широкий овал)
     private static final int ICON_WIDTH = 100;   // Ширина (было 40)
     private static final int ICON_HEIGHT = 50;   // Высота (было 80)
     
@@ -120,7 +120,6 @@ public class ToggleSwitch extends JPanel {
         
         BufferedImage currentIcon = state ? onIcon : offIcon;
         
-        // ИСПРАВЛЕНО: Пропорциональное масштабирование без искажений
         int imgWidth = currentIcon.getWidth();
         int imgHeight = currentIcon.getHeight();
         double imgAspect = (double) imgWidth / imgHeight;
