@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Панель управления индикатором - реализует MVC-подход.
  * Объединяет ручное управление через слайдер и автоматический симулятор.
  * 
+ * НОВОЕ: Добавлена секция редактирования зон (min/max, critical, warning).
+ * 
  * Ключевая особенность: защита от циклических обновлений между
  * слайдером и индикатором через флаг isUpdatingSlider.
  */
@@ -28,6 +30,15 @@ public class ControlPanel extends JPanel {
     private JCheckBox smoothCheckBox;
     private JLabel statusLabel;
 
+    // НОВЫЕ поля для редактирования зон
+    private JSpinner minValueSpinner;
+    private JSpinner maxValueSpinner;
+    private JSpinner criticalLowSpinner;
+    private JSpinner criticalHighSpinner;
+    private JSpinner warningLowSpinner;
+    private JSpinner warningHighSpinner;
+    private JButton applyZonesButton;
+
     public ControlPanel(LevelIndicator indicator, DataSimulator simulator, JFrame parentFrame) {
         this.indicator = indicator;
         this.simulator = simulator;
@@ -35,7 +46,7 @@ public class ControlPanel extends JPanel {
 
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        setPreferredSize(new Dimension(280, 600));
+        setPreferredSize(new Dimension(280, 700));  // УВЕЛИЧЕНО для новой секции
 
         initComponents();
         setupListeners();
@@ -54,9 +65,14 @@ public class ControlPanel extends JPanel {
         mainPanel.add(Box.createVerticalStrut(10));
         mainPanel.add(createPresetPanel());
         mainPanel.add(Box.createVerticalStrut(10));
+        mainPanel.add(createZoneEditorPanel());  // НОВАЯ секция
+        mainPanel.add(Box.createVerticalStrut(10));
         mainPanel.add(createStatusPanel());
 
-        add(mainPanel, BorderLayout.CENTER);
+        JScrollPane scrollPane = new JScrollPane(mainPanel);
+        scrollPane.setBorder(null);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        add(scrollPane, BorderLayout.CENTER);
     }
 
     /**
@@ -171,6 +187,148 @@ public class ControlPanel extends JPanel {
         panel.add(createCenteredButtonPanel(btnReset));
 
         return panel;
+    }
+
+    /**
+     * НОВАЯ СЕКЦИЯ: Редактор границ зон с валидацией.
+     * Позволяет изменять min/max, critical и warning диапазоны в реальном времени.
+     */
+    private JPanel createZoneEditorPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(new TitledBorder("Настройка зон"));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(3, 5, 3, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        LevelIndicatorConfig config = indicator.getConfig();
+
+        // Строка 0: Min Value
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.4;
+        panel.add(new JLabel("Min:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 0.6;
+        minValueSpinner = new JSpinner(new SpinnerNumberModel(config.getMinValue(), -1000.0, 1000.0, 1.0));
+        panel.add(minValueSpinner, gbc);
+
+        // Строка 1: Max Value
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.4;
+        panel.add(new JLabel("Max:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 0.6;
+        maxValueSpinner = new JSpinner(new SpinnerNumberModel(config.getMaxValue(), -1000.0, 1000.0, 1.0));
+        panel.add(maxValueSpinner, gbc);
+
+        // Строка 2: Critical Low
+        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.4;
+        panel.add(new JLabel("Крит. низ:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 0.6;
+        criticalLowSpinner = new JSpinner(new SpinnerNumberModel(config.getCriticalLow(), -1000.0, 1000.0, 1.0));
+        panel.add(criticalLowSpinner, gbc);
+
+        // Строка 3: Critical High
+        gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0.4;
+        panel.add(new JLabel("Крит. верх:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 0.6;
+        criticalHighSpinner = new JSpinner(new SpinnerNumberModel(config.getCriticalHigh(), -1000.0, 1000.0, 1.0));
+        panel.add(criticalHighSpinner, gbc);
+
+        // Строка 4: Warning Low
+        gbc.gridx = 0; gbc.gridy = 4; gbc.weightx = 0.4;
+        panel.add(new JLabel("Предупр. низ:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 0.6;
+        warningLowSpinner = new JSpinner(new SpinnerNumberModel(config.getWarningLow(), -1000.0, 1000.0, 1.0));
+        panel.add(warningLowSpinner, gbc);
+
+        // Строка 5: Warning High
+        gbc.gridx = 0; gbc.gridy = 5; gbc.weightx = 0.4;
+        panel.add(new JLabel("Предупр. верх:"), gbc);
+        gbc.gridx = 1; gbc.weightx = 0.6;
+        warningHighSpinner = new JSpinner(new SpinnerNumberModel(config.getWarningHigh(), -1000.0, 1000.0, 1.0));
+        panel.add(warningHighSpinner, gbc);
+
+        // Строка 6: Кнопка применения
+        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 2;
+        applyZonesButton = new JButton("Применить зоны");
+        applyZonesButton.setBackground(new Color(33, 150, 243));
+        applyZonesButton.setForeground(Color.WHITE);
+        applyZonesButton.setFocusPainted(false);
+        applyZonesButton.setOpaque(true);
+        applyZonesButton.setBorderPainted(false);
+        panel.add(applyZonesButton, gbc);
+
+        applyZonesButton.addActionListener(e -> applyZoneChanges());
+
+        return panel;
+    }
+
+    /**
+     * НОВЫЙ МЕТОД: Применение изменений зон с валидацией.
+     * Показывает ошибки через диалоги, обновляет слайдер при изменении диапазона.
+     */
+    private void applyZoneChanges() {
+        try {
+            double min = ((Number) minValueSpinner.getValue()).doubleValue();
+            double max = ((Number) maxValueSpinner.getValue()).doubleValue();
+            double critLow = ((Number) criticalLowSpinner.getValue()).doubleValue();
+            double critHigh = ((Number) criticalHighSpinner.getValue()).doubleValue();
+            double warnLow = ((Number) warningLowSpinner.getValue()).doubleValue();
+            double warnHigh = ((Number) warningHighSpinner.getValue()).doubleValue();
+
+            // Создаем новую конфигурацию (Builder валидирует порядок)
+            LevelIndicatorConfig newConfig = new LevelIndicatorConfig.Builder()
+                    .setMinValue(min)
+                    .setMaxValue(max)
+                    .setCriticalLow(critLow)
+                    .setCriticalHigh(critHigh)
+                    .setWarningLow(warnLow)
+                    .setWarningHigh(warnHigh)
+                    .build();
+
+            // Применяем к индикатору
+            indicator.updateConfig(newConfig);
+
+            // Обновляем диапазон слайдера
+            isUpdatingSlider.set(true);
+            try {
+                valueSlider.setMinimum((int) min);
+                valueSlider.setMaximum((int) max);
+                
+                // Корректируем текущее значение если вышло за границы
+                double currentValue = indicator.getValue();
+                if (currentValue < min || currentValue > max) {
+                    double clampedValue = Math.max(min, Math.min(max, currentValue));
+                    indicator.setValue(clampedValue);
+                    valueSlider.setValue((int) clampedValue);
+                }
+            } finally {
+                isUpdatingSlider.set(false);
+            }
+
+            // Уведомление об успехе
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Зоны успешно обновлены!",
+                    "Успех",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+        } catch (IllegalStateException ex) {
+            // Ошибка валидации из Builder
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ошибка валидации зон:\n" + ex.getMessage(),
+                    "Некорректные значения",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        } catch (Exception ex) {
+            // Непредвиденная ошибка
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Неожиданная ошибка:\n" + ex.getMessage(),
+                    "Ошибка",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            ex.printStackTrace();
+        }
     }
 
     private JButton createPresetButton(String text) {

@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * - CopyOnWriteArrayList для слушателей (lock-free чтение в paintComponent)
  * - Отложенное сохранение в storage (100ms) для снижения нагрузки на память
  * - Atomic переменные для thread-safe работы с симулятором
+ * - НОВОЕ: Динамическое обновление конфигурации зон через updateConfig()
  * 
  * Визуальные элементы:
  * - Цветовые зоны (норма/предупреждение/авария)
@@ -50,7 +51,7 @@ public class LevelIndicator extends JPanel {
     private static final long STORAGE_THROTTLE_MS = 100;     // 10 записей/сек
     private static final long LISTENER_THROTTLE_MS = 50;     // 20 уведомлений/сек
 
-    private final LevelIndicatorConfig config;
+    private volatile LevelIndicatorConfig config;  // ИЗМЕНЕНО: теперь volatile для динамического обновления
     private final LevelDataStorage storage;
     private final List<LevelDataListener> listeners;  // Thread-safe через CopyOnWriteArrayList
     
@@ -96,6 +97,43 @@ public class LevelIndicator extends JPanel {
      */
     public LevelIndicator() {
         this(LevelIndicatorConfig.createDefault());
+    }
+
+    /**
+     * НОВЫЙ МЕТОД: Динамическое обновление конфигурации зон без пересоздания компонента.
+     * Пересчитывает текущую зону и форсирует перерисовку.
+     * 
+     * @param newConfig новая конфигурация зон
+     * @throws IllegalArgumentException если конфигурация null
+     */
+    public void updateConfig(LevelIndicatorConfig newConfig) {
+        if (newConfig == null) {
+            throw new IllegalArgumentException("Новая конфигурация не может быть null");
+        }
+
+        // Атомарная замена конфигурации
+        LevelIndicatorConfig oldConfig = this.config;
+        this.config = newConfig;
+
+        // Пересчет зоны для текущего значения
+        LevelZone oldZone = this.currentZone;
+        this.currentZone = newConfig.determineZone(this.currentValue);
+
+        // Если текущее значение вне нового диапазона - корректируем
+        if (!newConfig.isInRange(this.currentValue)) {
+            double clampedValue = Math.max(newConfig.getMinValue(), 
+                                          Math.min(newConfig.getMaxValue(), this.currentValue));
+            setValue(clampedValue);
+        } else if (oldZone != this.currentZone) {
+            // Зона изменилась - уведомляем слушателей
+            fireDataUpdateEvent(this.currentValue, this.currentValue, oldZone, this.currentZone);
+        }
+
+        // Сохраняем событие обновления конфигурации в storage
+        storage.addData(new LevelData(this.currentValue, this.currentZone));
+
+        // Форсируем немедленную перерисовку
+        SwingUtilities.invokeLater(this::repaint);
     }
 
     /**
@@ -291,19 +329,19 @@ public class LevelIndicator extends JPanel {
 
         // Отрисовка зон снизу вверх (критическая -> предупреждение -> норма -> предупреждение -> критическая)
         g2d.setColor(LevelZone.CRITICAL.getColor());
-        g2d.fillRect(x, y, width, (int) criticalLowHeight);
+        g2d.fillRect(x, y + height - (int) criticalLowHeight, width, (int) criticalLowHeight);
 
         g2d.setColor(LevelZone.WARNING.getColor());
-        g2d.fillRect(x, y + (int) criticalLowHeight, width, (int) (warningLowHeight - criticalLowHeight));
+        g2d.fillRect(x, y + height - (int) warningLowHeight, width, (int) (warningLowHeight - criticalLowHeight));
 
         g2d.setColor(LevelZone.NORMAL.getColor());
-        g2d.fillRect(x, y + (int) warningLowHeight, width, (int) (warningHighHeight - warningLowHeight));
+        g2d.fillRect(x, y + height - (int) warningHighHeight, width, (int) (warningHighHeight - warningLowHeight));
 
         g2d.setColor(LevelZone.WARNING.getColor());
-        g2d.fillRect(x, y + (int) warningHighHeight, width, (int) (criticalHighHeight - warningHighHeight));
+        g2d.fillRect(x, y + height - (int) criticalHighHeight, width, (int) (criticalHighHeight - warningHighHeight));
 
         g2d.setColor(LevelZone.CRITICAL.getColor());
-        g2d.fillRect(x, y + (int) criticalHighHeight, width, height - (int) criticalHighHeight);
+        g2d.fillRect(x, y, width, height - (int) criticalHighHeight);
     }
 
     /**
