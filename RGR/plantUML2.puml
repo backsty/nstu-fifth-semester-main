@@ -1,0 +1,215 @@
+@startuml EventsAndBackgroundTasks
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+left to right direction
+
+title РГР Часть 2: События, Слушатели и Фоновые задачи (10 баллов)
+
+package "Event Layer" {
+    abstract class PowerEvent {
+        - timestamp: LocalDateTime
+        - powerState: PowerState
+        --
+        + getTimestamp(): LocalDateTime
+        + {abstract} getEventType(): String
+    }
+    
+    class ConsumptionEvent {
+        - totalPower: double
+        - previousPower: double
+        - activeDevices: int
+        --
+        + getPowerChange(): double
+        + isIncreasing(): boolean
+    }
+    
+    class OverloadEvent {
+        - currentPower: double
+        - maxPower: double
+        - culprits: List<String>
+        --
+        + getOverloadAmount(): double
+        + getSeverity(): OverloadSeverity
+    }
+    
+    class BatteryLevelEvent {
+        - deviceId: String
+        - batteryLevel: double
+        - isCharging: boolean
+        --
+        + isLowBattery(): boolean
+    }
+}
+
+package "Listener Layer" {
+    interface PowerSystemListener {
+        + onConsumptionChanged(event): void
+        + onOverload(event): void
+        + onPowerStateChanged(event): void
+        + onBatteryLevelChanged(event): void
+    }
+}
+
+' Наследование Events (вертикально)
+PowerEvent -up-|> EventObject
+ConsumptionEvent --|> PowerEvent
+OverloadEvent --|> PowerEvent
+BatteryLevelEvent --|> PowerEvent
+
+' Связи Listeners (горизонтально)
+PowerSystemListener <.. ConsumptionEvent : "получает"
+PowerSystemListener <.. OverloadEvent : "получает"
+PowerSystemListener <.. BatteryLevelEvent : "получает"
+
+' === БЛОК ФОНОВЫХ ЗАДАЧ (НИЖЕ) ===
+
+package "Task Layer (10 баллов - Фоновые задачи)" <<Frame>> {
+    abstract class BackgroundTask {
+        - cancelled: boolean
+        - progressListener: ProgressListener
+        - completionListener: TaskCompletionListener
+        - startTime: long
+        --
+        # {abstract} performTask(): T
+        # publishProgress(int, String): void
+        # checkCancelled(): void
+        # getElapsedTime(): long
+        # doInBackground(): T
+    }
+    
+    interface ProgressListener {
+        + onProgressUpdate(int, String): void
+    }
+    
+    interface TaskCompletionListener {
+        + onSuccess(T): void
+        + onError(Exception): void
+        + onCancelled(): void
+    }
+}
+
+BackgroundTask -up-|> SwingWorker
+BackgroundTask +-- ProgressListener
+BackgroundTask +-- TaskCompletionListener
+
+' === КОНКРЕТНЫЕ ЗАДАЧИ (ЕЩЕ НИЖЕ) ===
+
+package "Concrete Tasks" {
+    class ExportDataTask {
+        - controllers: List
+        - targetFile: File
+        - includeHistory: boolean
+        --
+        # performTask(): File
+        - writeDeviceSection(): void
+        - writeHistorySection(): void
+        - escapeCsv(String): String
+    }
+    
+    class ImportDataTask {
+        - sourceFile: File
+        - powerSystem: Controller
+        - guiCallback: DeviceAddCallback
+        --
+        # performTask(): ImportResult
+        - parseCsvLine(String): String[]
+        - createDeviceFromRow(String[]): Controller
+    }
+    
+    class SystemAnalysisTask {
+        - powerSystem: Controller
+        --
+        # performTask(): SystemReport
+        - generateRecommendations(report): void
+    }
+    
+    class LoadTestTask {
+        - powerSystem: Controller
+        - iterations: int
+        - intervalMs: int
+        --
+        # performTask(): LoadTestResult
+    }
+}
+
+ExportDataTask -up-|> BackgroundTask
+ImportDataTask -up-|> BackgroundTask
+SystemAnalysisTask -up-|> BackgroundTask
+LoadTestTask -up-|> BackgroundTask
+
+' === ПРОГРЕСС ДИАЛОГ (ВНИЗУ) ===
+
+package "Progress UI" {
+    class ProgressDialog {
+        - progressBar: JProgressBar
+        - statusLabel: JLabel
+        - currentTask: BackgroundTask
+        - timeUpdateTimer: Timer
+        --
+        + executeTask(task): void
+        - showSuccess(result): void
+        - showError(exception): void
+    }
+}
+
+ProgressDialog -up-|> JDialog
+ProgressDialog ..> BackgroundTask : "запускает"
+ProgressDialog .up.|> ProgressListener : "реализует"
+ProgressDialog .up.|> TaskCompletionListener : "реализует"
+
+' === АННОТАЦИИ (СПРАВА ОТ БЛОКОВ) ===
+
+note right of BackgroundTask
+  **Требование: Фоновые задачи (10 баллов)**
+  • Использует SwingWorker (без блокировки GUI)
+  • Паттерн Template Method (performTask)
+  • Прогресс-бар с процентами и сообщениями
+  • Поддержка отмены операции (checkCancelled)
+  • Throttling перерисовки (16ms)
+end note
+
+note right of ExportDataTask
+  **Экспорт в CSV**
+  • Текущее состояние устройств
+  • История потребления (опционально)
+  • Escape-последовательности для спецсимволов
+  • Прогресс: 0% → 100%
+end note
+
+note right of ImportDataTask
+  **Импорт из CSV**
+  • Парсинг с учетом кавычек
+  • Создание устройств через callback в EDT
+  • Валидация типов устройств
+  • Два режима: просмотр/восстановление
+end note
+
+note right of SystemAnalysisTask
+  **Анализ системы**
+  • Агрегация статистики (5 этапов)
+  • Генерация рекомендаций
+  • Расчет эффективности
+  • Результат: SystemReport DTO
+end note
+
+note right of LoadTestTask
+  **Нагрузочный тест**
+  • Периодический сбор данных (50-1000 замеров)
+  • Статистика: min/max/avg
+  • Ring buffer для истории
+  • Результат: LoadTestResult с графиком
+end note
+
+note right of ProgressDialog
+  **Модальное окно прогресса**
+  • Блокирует главное окно (modal=true)
+  • Таймер отображения времени выполнения
+  • Обработка успеха/ошибки/отмены
+  • JTextArea для вывода результата
+end note
+
+footer "РГР Часть 2 из 5"
+
+@enduml

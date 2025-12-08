@@ -4,6 +4,7 @@ import pw.ns2030.component.ApplianceControlPanel;
 import pw.ns2030.component.PowerMeterPanel;
 import pw.ns2030.controller.*;
 import pw.ns2030.model.*;
+import pw.ns2030.dialog.*;
 
 import javax.swing.*;
 import java.awt.*;
@@ -40,7 +41,7 @@ public class PowerSystemDemo extends JFrame {
         setMinimumSize(new Dimension(900, 700));
         setLocationRelativeTo(null);
         
-        addInitialDevices();
+        // addInitialDevices();
     }
 
     private void initComponents() {
@@ -180,31 +181,67 @@ public class PowerSystemDemo extends JFrame {
         });
     }
 
-    private void addInitialDevices() {
+    public void addInitialDevices() {
         addKettle();
         addLamp();
         addComputer();
     }
 
+    /**
+     * Добавление чайника через диалог.
+     */
     private void addKettle() {
-        String id = "kettle-" + deviceCounter++;
-        Kettle kettle = new Kettle(id, "Чайник #" + (deviceCounter - 1));
-        KettleController controller = new KettleController(kettle);
-        addDevice(controller);
+        String defaultName = "Чайник #" + deviceCounter;
+        KettleConfigDialog dialog = new KettleConfigDialog(this, defaultName);
+        dialog.setVisible(true);
+        
+        if (dialog.isConfirmed()) {
+            String id = "kettle-" + deviceCounter++;
+            String name = dialog.getDeviceName();
+            double power = dialog.getPower();
+            
+            Kettle kettle = new Kettle(id, name, power);
+            KettleController controller = new KettleController(kettle);
+            addDevice(controller);
+        }
     }
 
+    /**
+     *  Добавление лампы через диалог.
+     */
     private void addLamp() {
-        String id = "lamp-" + deviceCounter++;
-        Lamp lamp = new Lamp(id, "Лампа #" + (deviceCounter - 1));
-        LampController controller = new LampController(lamp);
-        addDevice(controller);
+        String defaultName = "Лампа #" + deviceCounter;
+        LampConfigDialog dialog = new LampConfigDialog(this, defaultName);
+        dialog.setVisible(true);
+        
+        if (dialog.isConfirmed()) {
+            String id = "lamp-" + deviceCounter++;
+            String name = dialog.getDeviceName();
+            double power = dialog.getPower();
+            
+            Lamp lamp = new Lamp(id, name, power);
+            LampController controller = new LampController(lamp);
+            addDevice(controller);
+        }
     }
 
+    /**
+     * Добавление компьютера через диалог.
+     */
     private void addComputer() {
-        String id = "computer-" + deviceCounter++;
-        Computer computer = new Computer(id, "Компьютер #" + (deviceCounter - 1));
-        ComputerController controller = new ComputerController(computer);
-        addDevice(controller);
+        String defaultName = "Компьютер #" + deviceCounter;
+        ComputerConfigDialog dialog = new ComputerConfigDialog(this, defaultName);
+        dialog.setVisible(true);
+        
+        if (dialog.isConfirmed()) {
+            String id = "computer-" + deviceCounter++;
+            String name = dialog.getDeviceName();
+            double power = dialog.getPower();
+            
+            Computer computer = new Computer(id, name, power);
+            ComputerController controller = new ComputerController(computer);
+            addDevice(controller);
+        }
     }
 
     private void addDevice(ApplianceController controller) {
@@ -231,12 +268,10 @@ public class PowerSystemDemo extends JFrame {
     private void removeDevice(ApplianceControlPanel panel, ApplianceController controller) {
         panel.cleanup();
         
-        // Удаляем панель И следующий за ней strut
         int index = getComponentIndex(devicesPanel, panel);
         if (index >= 0) {
             devicesPanel.remove(panel);
             
-            // Удаляем следующий компонент если это strut
             if (index < devicesPanel.getComponentCount()) {
                 Component nextComponent = devicesPanel.getComponent(index);
                 if (nextComponent instanceof Box.Filler) {
@@ -252,9 +287,6 @@ public class PowerSystemDemo extends JFrame {
         devicesPanel.repaint();
     }
 
-    /**
-     * Поиск индекса компонента в контейнере.
-     */
     private int getComponentIndex(Container container, Component component) {
         Component[] components = container.getComponents();
         for (int i = 0; i < components.length; i++) {
@@ -314,6 +346,7 @@ public class PowerSystemDemo extends JFrame {
             "Группа: АВТ-343\n\n" +
             "Возможности:\n" +
             "- Динамическое добавление устройств\n" +
+            "- Настраиваемая мощность устройств\n" +
             "- Мониторинг потребления в реальном времени\n" +
             "- Автоматическая защита от перегрузки\n" +
             "- Модели поведения устройств\n" +

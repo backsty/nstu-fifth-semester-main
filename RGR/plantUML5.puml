@@ -1,0 +1,152 @@
+@startuml BackgroundTasksSequence
+
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam BoxPadding 10
+skinparam ParticipantPadding 15
+
+title Sequence Diagram: Фоновые задачи с ProgressDialog (10 баллов)
+
+actor "👤 Пользователь" as user
+participant "🖥️ PowerSystemDemo" as main <<Main Window>>
+participant "⏳ ProgressDialog" as dialog <<Modal>>
+participant "📦 ExportDataTask" as task <<SwingWorker>>
+participant "🧵 Worker Thread" as worker <<Background>>
+participant "🎨 EDT Thread" as edt <<Swing>>
+
+autonumber
+
+== 🚀 Инициация экспорта ==
+user -> main: Меню → Экспорт данных
+activate main #LightBlue
+main -> task: new ExportDataTask(controllers, file)
+activate task #LightYellow
+task -> task: startTime = now()
+return
+deactivate task
+
+main -> dialog: new ProgressDialog(this, "Экспорт")
+activate dialog #LightCoral
+dialog -> dialog: init: JProgressBar + Timer
+main -> dialog: executeTask(task)
+
+dialog -> task: setProgressListener(λ)
+dialog -> task: setCompletionListener(λ)
+
+== 🏃 Запуск фонового потока ==
+dialog -> task: execute()
+activate task #LightYellow
+task -> worker: doInBackground()
+activate worker #LightGreen
+note right of worker #AAFFAA
+  ⚙️ **SwingWorker Thread**
+  НЕ блокирует GUI!
+end note
+
+dialog -> user: setVisible(true) 🔒
+note right of dialog #FFAAAA
+  ⚠️ **Modal Window**
+  Блокирует главное окно
+end note
+
+== 📝 Выполнение с прогрессом ==
+worker -> task: performTask()
+activate task #LightYellow
+
+task -> task: publishProgress(0, "Подготовка...")
+task -> edt: publish(ProgressUpdate)
+activate edt #LightSkyBlue
+edt -> dialog: onProgressUpdate(0, "...")
+dialog -> dialog: progressBar.setValue(0)
+return
+deactivate edt
+
+loop 📊 Для каждого устройства (1..N)
+    task -> task: checkCancelled()
+    alt ❌ Отмена нажата
+        task -> task: throw TaskCancelledException
+        note right of task #FFCCCC
+          🛑 Прерывание
+        end note
+    end
+    
+    task -> task: writer.write(device.toCsv())
+    task -> task: publishProgress(percent, "Устройство i/N")
+    task -> edt: publish(ProgressUpdate)
+    activate edt #LightSkyBlue
+    edt -> dialog: onProgressUpdate(percent, msg)
+    dialog -> dialog: progressBar.setValue()
+    return
+    deactivate edt
+    
+    task -> task: Thread.sleep(100)
+end
+
+task -> task: publishProgress(100, "Завершено!")
+return File
+deactivate task
+
+== ✅ Завершение в EDT ==
+worker -> task: done()
+task -> edt: completionListener.onSuccess(file)
+activate edt #LightSkyBlue
+edt -> dialog: onSuccess(file)
+dialog -> dialog: dispose()
+dialog -> user: 📄 JOptionPane: "Экспорт завершен!"
+note right of user #AAFFAA
+  ✅ **Успешный результат:**
+  Файл: system_export.csv
+  Устройств: 3
+  Записей: 30
+  Время: 5.6 сек
+end note
+deactivate edt
+deactivate worker
+deactivate task
+deactivate dialog
+deactivate main
+
+== ⚠️ Альтернатива: Ошибка ==
+alt 🔥 IOException при записи
+    worker -> task: throw IOException
+    activate task #FFCCCC
+    task -> edt: completionListener.onError(ex)
+    activate edt #FFCCCC
+    edt -> dialog: onError(ex)
+    dialog -> user: ❌ JOptionPane: "Ошибка экспорта!"
+    note right of user #FFCCCC
+      ❌ **Ошибка:**
+      Access denied to file
+    end note
+    deactivate edt
+    deactivate task
+end
+
+== ⚠️ Альтернатива: Отмена ==
+alt 🛑 Пользователь нажал "Отменить"
+    user -> dialog: Клик "Отменить"
+    activate dialog #LightCoral
+    dialog -> task: requestCancel()
+    activate task #LightYellow
+    task -> task: cancelled = true
+    task -> worker: Thread.interrupt()
+    activate worker #FFCCCC
+    worker -> task: checkCancelled()
+    task -> task: throw TaskCancelledException
+    task -> edt: completionListener.onCancelled()
+    activate edt #LightGray
+    edt -> dialog: onCancelled()
+    dialog -> dialog: dispose()
+    note right of dialog #CCCCCC
+      🛑 **Операция отменена**
+      Частичный результат отброшен
+    end note
+    deactivate edt
+    deactivate worker
+    deactivate task
+    deactivate dialog
+end
+
+footer "РГР Часть 5 из 5 Sequence Diagram: Фоновые задачи"
+
+@enduml

@@ -1,0 +1,109 @@
+@startuml MultiWindowSequence
+
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam BoxPadding 10
+skinparam ParticipantPadding 20
+
+title Sequence Diagram: Многооконный интерфейс (20 баллов)
+
+actor "👤 Пользователь" as user
+participant "🖥️ PowerSystemDemo" as main <<Main Window>>
+participant "📋 DeviceSelectionDialog" as dialog <<Modal>>
+participant "☕ KettleWindow #1" as window1 <<Device Window>>
+participant "☕ KettleWindow #2" as window2 <<Device Window>>
+participant "⚙️ PowerSystemController" as controller <<Singleton>>
+
+autonumber
+
+== 🚀 Инициализация ==
+user -> main: Запуск приложения
+activate main #LightBlue
+main -> controller: new PowerSystemController()
+activate controller #LightGreen
+main -> main: setupMenuBar()
+return
+deactivate controller
+
+== ➕ Добавление устройств ==
+user -> main: Добавить чайник #1
+main -> controller: addDevice(kettleController1)
+activate controller #LightGreen
+controller -> controller: start()
+return
+deactivate controller
+
+user -> main: Добавить чайник #2
+main -> controller: addDevice(kettleController2)
+
+== 🪟 Открытие первого окна ==
+user -> main: Меню → Окна → Чайник...
+main -> dialog: new DeviceSelectionDialog(kettles)
+activate dialog #LightYellow
+dialog -> user: 📋 Список устройств
+user -> dialog: ✅ Выбор "Чайник #1"
+return kettleController1
+deactivate dialog
+
+main -> window1: **new** KettleWindow(controller1, powerSystem)
+activate window1 #LightCoral
+window1 -> window1: windowCounter++ → "Окно #1"
+window1 -> window1: initComponents()
+window1 -> window1: startUpdates()
+window1 -> user: ✨ Показать окно
+deactivate main
+
+== 🪟 Открытие второго окна (ТОТ ЖЕ ЧАЙНИК!) ==
+user -> main: Меню → Окна → Чайник...
+activate main #LightBlue
+main -> dialog: new DeviceSelectionDialog(kettles)
+activate dialog #LightYellow
+user -> dialog: ✅ Выбор "Чайник #1" (повторно!)
+return kettleController1
+deactivate dialog
+
+main -> window2: **new** KettleWindow(controller1, powerSystem)
+activate window2 #LightSalmon
+window2 -> window2: windowCounter++ → "Окно #2"
+note right of window2 #FFAAAA
+  ⚠️ **Неограниченные экземпляры**
+  ДВА окна для ОДНОГО устройства!
+end note
+window2 -> window2: startUpdates()
+window2 -> user: ✨ Показать окно
+deactivate main
+
+== 🔄 Синхронизация через Observer ==
+user -> window1: 🔌 Клик "Включить"
+window1 -> controller: kettle.turnOn()
+activate controller #LightGreen
+controller -> controller: notifyListeners()
+controller --> window1: onStateChanged(event)
+controller --> window2: onStateChanged(event)
+activate window2 #LightSalmon
+window2 -> window2: updateData()
+note right of window2 #AAFFAA
+  ✅ **Автоматическое обновление**
+  Окно #2 синхронизировано
+  через Observer pattern
+end note
+deactivate window2
+deactivate controller
+
+== ❌ Закрытие окна ==
+user -> window2: Закрыть окно #2
+activate window2 #LightSalmon
+window2 -> window2: stopUpdates()
+window2 -> window2: dispose()
+destroy window2
+
+note over window1 #AAFFFF
+  ✅ Окно #1 работает независимо
+  Следующее будет "Окно #3"
+end note
+
+deactivate window1
+
+footer "РГР Часть 4 из 5 Sequence Diagram: Многооконный интерфейс"
+
+@enduml

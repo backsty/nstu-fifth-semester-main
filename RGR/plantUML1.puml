@@ -1,0 +1,189 @@
+@startuml ModelControllerWindowLayer
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+title РГР Часть 1: Модель, Контроллеры и Многооконный интерфейс (20 баллов)
+
+package "Model Layer" {
+    enum PowerState {
+        OFF, ON_GRID, ON_BATTERY
+        HEATING, COOLING
+        --
+        + getDisplayName(): String
+    }
+    
+    abstract class Appliance {
+        # id: String
+        # name: String
+        # ratedPower: double
+        # state: PowerState
+        --
+        + {abstract} turnOn(): void
+        + {abstract} turnOff(): void
+        + {abstract} getCurrentPower(): double
+        + isOn(): boolean
+    }
+    
+    class Kettle {
+        - temperature: double
+        --
+        + updateTemperature(double): void
+        + getTemperature(): double
+    }
+    
+    class Lamp {
+        + turnOn(): void
+        + turnOff(): void
+    }
+    
+    class Computer {
+        - batteryLevel: double
+        - isCharging: boolean
+        --
+        + updateBattery(double): void
+        + getBatteryLevel(): double
+    }
+}
+
+package "Controller Layer" {
+    abstract class ApplianceController {
+        # appliance: Appliance
+        # updateInterval: int
+        --
+        + start(): void
+        + stop(): void
+        + run(): void
+        # {abstract} updateState(double): void
+    }
+    
+    class KettleController {
+        + updateState(double): void
+    }
+    
+    class LampController {
+        + updateState(double): void
+    }
+    
+    class ComputerController {
+        + updateState(double): void
+    }
+    
+    class PowerSystemController {
+        - {static} MAX_POWER: 5000.0
+        - controllers: List
+        --
+        + addDevice(controller): void
+        + start(): void
+        - checkSystemState(): void
+    }
+}
+
+package "Window Layer (20 баллов - Многооконный интерфейс)" <<Frame>> {
+    abstract class DeviceWindow {
+        # controller: ApplianceController
+        # powerSystem: PowerSystemController
+        # updateTimer: Timer
+        {static} - windowCounter: int
+        --
+        # {abstract} initComponents(): void
+        # {abstract} setupLayout(): void
+        # {abstract} updateData(): void
+        + {static} getWindowCount(): int
+    }
+    
+    class KettleWindow {
+        - kettle: Kettle
+        - temperatureIndicator: LevelIndicator
+        - temperatureLabel: JLabel
+        --
+        # initComponents(): void
+        # updateData(): void
+    }
+    
+    class LampWindow {
+        - lamp: Lamp
+        - lightPanel: JPanel
+        --
+        # paintComponent(Graphics): void
+        # updateData(): void
+    }
+    
+    class ComputerWindow {
+        - computer: Computer
+        - batteryIndicator: LevelIndicator
+        - remainingTimeLabel: JLabel
+        --
+        # initComponents(): void
+        # updateData(): void
+    }
+}
+
+' Связи Model
+Appliance --> PowerState
+Kettle -up-|> Appliance
+Lamp -up-|> Appliance
+Computer -up-|> Appliance
+
+' Связи Controller
+ApplianceController -up-|> Runnable
+KettleController -up-|> ApplianceController
+LampController -up-|> ApplianceController
+ComputerController -up-|> ApplianceController
+PowerSystemController -up-|> Runnable
+
+ApplianceController *-- Appliance : "управляет"
+PowerSystemController *-- "0..*" ApplianceController
+
+' Связи Window (НОВОЕ)
+DeviceWindow -up-|> JFrame
+DeviceWindow *-- ApplianceController : "использует"
+DeviceWindow *-- PowerSystemController : "ссылка"
+KettleWindow -up-|> DeviceWindow
+LampWindow -up-|> DeviceWindow
+ComputerWindow -up-|> DeviceWindow
+
+KettleWindow ..> Kettle : "отображает"
+LampWindow ..> Lamp : "отображает"
+ComputerWindow ..> Computer : "отображает"
+
+' Аннотации
+note top of DeviceWindow
+  **Требование: Многооконный интерфейс (20 баллов)**
+  • Неограниченное количество экземпляров окон
+  • Передача контроллера через конструктор
+  • Независимое управление каждым окном
+  • Счетчик windowCounter для уникальных заголовков
+end note
+
+note right of PowerSystemController
+  **Центральный контроллер**
+  Создается в главном окне и
+  передается всем дочерним окнам
+end note
+
+note bottom of KettleWindow
+  **Оригинальный набор датчиков:**
+  • Индикатор температуры (20-100°C)
+  • Дисплей с цветовой индикацией
+  • Кнопки управления нагревом
+end note
+
+note bottom of LampWindow
+  **Оригинальный набор датчиков:**
+  • Визуализация свечения (Canvas)
+  • Эффект glow при включении
+  • Анимированная перерисовка
+end note
+
+note bottom of ComputerWindow
+  **Оригинальный набор датчиков:**
+  • Индикатор батареи (0-100%)
+  • Таймер оставшегося времени
+  • Иконки режимов (зарядка/батарея)
+end note
+
+footer "РГР Часть 1 из 5"
+
+@enduml

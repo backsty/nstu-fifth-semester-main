@@ -1,0 +1,221 @@
+@startuml UIComponentsAndDemo
+
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+title РГР Часть 3: UI Компоненты и Главное окно
+
+' === ВЕРХНИЙ УРОВЕНЬ: БАЗОВЫЕ КОМПОНЕНТЫ ===
+
+package "Component Layer - Base" {
+    enum LevelZone {
+        NORMAL("Зелёный")
+        WARNING("Жёлтый")
+        CRITICAL("Красный")
+        --
+        + getColor(): Color
+        + isCritical(): boolean
+    }
+    
+    class LevelIndicatorConfig {
+        - minValue: double
+        - maxValue: double
+        - criticalLow/High: double
+        - warningLow/High: double
+        --
+        + determineZone(value): LevelZone
+        + normalize(value): double
+        + {static} createDefault(): Config
+    }
+    
+    class LevelIndicator {
+        - config: LevelIndicatorConfig
+        - storage: LevelDataStorage
+        - currentValue: double
+        - currentZone: LevelZone
+        --
+        + setValue(value): void
+        + updateConfig(config): void
+        # paintComponent(g): void
+    }
+    
+    class ToggleSwitch {
+        - onIcon: BufferedImage
+        - offIcon: BufferedImage
+        - state: boolean
+        --
+        + setState(state): void
+        # paintComponent(g): void
+    }
+}
+
+LevelIndicator -up-|> JPanel
+ToggleSwitch -up-|> JPanel
+LevelIndicatorConfig +-- LevelIndicatorConfig.Builder
+LevelIndicator *-- LevelIndicatorConfig : "конфигурация"
+LevelIndicator *-- LevelDataStorage : "хранилище"
+LevelIndicator --> LevelZone : "использует"
+
+note right of LevelIndicator
+  **Кастомный индикатор уровня**
+  • Визуализация зон (зелёный/жёлтый/красный)
+  • Накопление истории через LevelDataStorage
+  • Кастомная отрисовка через paintComponent()
+end note
+
+' === СРЕДНИЙ УРОВЕНЬ: ПАНЕЛИ ===
+
+package "Component Layer - Panels" {
+    class PowerMeterPanel {
+        - powerSystem: PowerSystemController
+        - powerIndicator: LevelIndicator
+        - statusLabel: JLabel
+        - consumptionLabel: JLabel
+        - devicesLabel: JLabel
+        - configButton: JButton
+        --
+        + onConsumptionChanged(event): void
+        + onOverload(event): void
+        - openConfigDialog(): void
+    }
+    
+    class ApplianceControlPanel {
+        - controller: ApplianceController
+        - powerSystem: PowerSystemController
+        - toggleSwitch: ToggleSwitch
+        - nameLabel: JLabel
+        - powerLabel: JLabel
+        - statusLabel: JLabel
+        - updateTimer: Timer
+        --
+        - updateDeviceUI(): void
+        - openDeviceWindow(): void
+    }
+}
+
+PowerMeterPanel -up-|> JPanel
+PowerMeterPanel .up.|> PowerSystemListener : "реализует"
+PowerMeterPanel *-up- LevelIndicator : "содержит"
+
+ApplianceControlPanel -up-|> JPanel
+ApplianceControlPanel *-up- ToggleSwitch : "содержит"
+
+note right of PowerMeterPanel
+  **Панель мониторинга**
+  • Динамический индикатор (0-5000 Вт)
+  • Кнопка настройки зон
+  • Реализует PowerSystemListener
+end note
+
+note right of ApplianceControlPanel
+  **Панель устройства**
+  • Двойной клик → открытие окна
+  • Обновление через Timer (500ms)
+end note
+
+' === НИЖНИЙ УРОВЕНЬ: ДИАЛОГИ ===
+
+package "Dialog Layer" {
+    abstract class DeviceConfigDialog {
+        # nameField: JTextField
+        # powerSpinner: JSpinner
+        --
+        # {abstract} addCustomFields(): void
+        # {abstract} validateCustomFields(): boolean
+        + showDialog(): boolean
+    }
+    
+    class KettleConfigDialog
+    class LampConfigDialog
+    class ComputerConfigDialog
+    
+    class DeviceSelectionDialog {
+        - devices: List<ApplianceController>
+        - deviceList: JList
+        - confirmed: boolean
+        --
+        + getSelectedDevice(): ApplianceController
+        + isConfirmed(): boolean
+        + showDialog(): boolean
+    }
+    
+    class PowerIndicatorConfigDialog {
+        - maxPowerSpinner: JSpinner
+        - criticalLowSpinner: JSpinner
+        - warningLowSpinner: JSpinner
+        - warningHighSpinner: JSpinner
+        --
+        + getMaxPower(): double
+        + getCriticalLow(): double
+        + showDialog(): boolean
+    }
+}
+
+DeviceConfigDialog -up-|> JDialog
+KettleConfigDialog -up-|> DeviceConfigDialog
+LampConfigDialog -up-|> DeviceConfigDialog
+ComputerConfigDialog -up-|> DeviceConfigDialog
+DeviceSelectionDialog -up-|> JDialog
+PowerIndicatorConfigDialog -up-|> JDialog
+
+PowerMeterPanel .down.> PowerIndicatorConfigDialog : "открывает"
+
+note right of DeviceSelectionDialog
+  **Диалог выбора устройства**
+  Используется когда в системе
+  несколько устройств одного типа
+end note
+
+' === САМЫЙ НИЖНИЙ УРОВЕНЬ: ГЛАВНОЕ ОКНО ===
+
+package "Demo Layer" {
+    class PowerSystemDemo {
+        - powerSystem: PowerSystemController
+        - powerMeterPanel: PowerMeterPanel
+        - devicePanels: List<ApplianceControlPanel>
+        - devicesPanel: JPanel
+        - controlPanel: JPanel
+        - deviceCounter: int
+        --
+        - setupMenuBar(): void
+        - addKettle(): void
+        - addLamp(): void
+        - addComputer(): void
+        - executeExportTask(): void
+        - executeImportTask(): void
+        - executeAnalysisTask(): void
+        - executeLoadTestTask(): void
+        - openKettleWindowWithSelection(): void
+    }
+    
+    class Main {
+        + {static} main(args): void
+    }
+}
+
+PowerSystemDemo -up-|> JFrame
+PowerSystemDemo *-up- PowerMeterPanel : "содержит 1"
+PowerSystemDemo *-up- "0..*" ApplianceControlPanel : "содержит 0..*"
+PowerSystemDemo ..up> DeviceConfigDialog : "использует"
+PowerSystemDemo ..up> DeviceSelectionDialog : "использует"
+PowerSystemDemo ..up> ProgressDialog : "использует"
+Main .down.> PowerSystemDemo : "создаёт"
+
+note right of PowerSystemDemo
+  **Главное окно (MVC)**
+  • Создает PowerSystemController
+  • Передает ссылку окнам через конструктор
+  • Меню: Файл/Устройства/Окна/Операции/Система
+  • Операции запускают фоновые задачи
+end note
+
+note left of Main
+  **Точка входа**
+  Запускает приложение
+  в EDT через invokeLater()
+end note
+
+footer "РГР Часть 3 из 5"
+
+@enduml

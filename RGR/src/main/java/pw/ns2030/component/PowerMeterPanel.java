@@ -11,6 +11,10 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 
+/**
+ * Панель мониторинга общего потребления энергии.
+ * Отображает индикатор уровня, статистику и кнопку конфигурации.
+ */
 public class PowerMeterPanel extends JPanel implements PowerSystemListener {
     private final PowerSystemController powerSystem;
     private final LevelIndicator powerIndicator;
@@ -62,7 +66,7 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
         devicesLabel = new JLabel("Устройств: 0 (активных: 0)", SwingConstants.CENTER);
         devicesLabel.setFont(labelFont);
         
-        powerStateLabel = new JLabel("[V] Питание в норме", SwingConstants.CENTER);
+        powerStateLabel = new JLabel("[OK] Питание в норме", SwingConstants.CENTER);
         powerStateLabel.setFont(new Font("Arial", Font.BOLD, 12));
         powerStateLabel.setOpaque(true);
         powerStateLabel.setBackground(new Color(76, 175, 80));
@@ -110,7 +114,7 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
     }
 
     /**
-     * Открытие диалога конфигурации индикатора.
+     * Открытие диалога конфигурации индикатора с применением новых настроек.
      */
     private void openConfigDialog() {
         LevelIndicatorConfig currentConfig = powerIndicator.getConfig();
@@ -191,11 +195,7 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
         return panel;
     }
 
-    /**
-     * Обновление легенды после изменения конфигурации.
-     */
     private void updateLegend(LevelIndicatorConfig config) {
-        // Удаляем старую легенду
         Component[] components = getComponents();
         for (Component comp : components) {
             if (comp instanceof JPanel) {
@@ -290,7 +290,7 @@ public class PowerMeterPanel extends JPanel implements PowerSystemListener {
             boolean available = powerSystem.isPowerAvailable();
             
             if (available) {
-                powerStateLabel.setText("[V] Питание в норме");
+                powerStateLabel.setText("[OK] Питание в норме");
                 powerStateLabel.setBackground(new Color(76, 175, 80));
             } else {
                 powerStateLabel.setText("[X] Питание отключено");
