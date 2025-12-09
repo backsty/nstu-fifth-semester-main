@@ -2,24 +2,16 @@ package pw.ns2030.task;
 
 import pw.ns2030.controller.*;
 import pw.ns2030.model.*;
-import pw.ns2030.task.TaskHelpers.*;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/**
- * Задача импорта данных из CSV файла.
- * Поддерживает два режима: просмотр данных и полное восстановление устройств.
- */
 public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> {
     private final File sourceFile;
     private final PowerSystemController powerSystem;
     private final DeviceAddCallback guiCallback;
 
-    /**
-     * Callback для добавления устройства в GUI через EDT.
-     */
     @FunctionalInterface
     public interface DeviceAddCallback {
         void addDeviceToGUI(ApplianceController controller);
@@ -39,37 +31,25 @@ public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> 
     protected ImportResult performTask() throws Exception {
         publishProgress(0, "Открытие файла...");
         Thread.sleep(200);
-        
         checkCancelled();
 
         List<String[]> deviceRows = new ArrayList<>();
-        List<String[]> historyRows = new ArrayList<>();
         int totalLines = 0;
         
-        // Подсчет строк для прогресса
         try (BufferedReader counter = new BufferedReader(
-                new InputStreamReader(
-                    new FileInputStream(sourceFile), 
-                    StandardCharsets.UTF_8))) {
-            while (counter.readLine() != null) {
-                totalLines++;
-            }
+                new InputStreamReader(new FileInputStream(sourceFile), StandardCharsets.UTF_8))) {
+            while (counter.readLine() != null) totalLines++;
         }
         
-        publishProgress(5, String.format("Файл содержит %d строк", totalLines));
-        
+        publishProgress(5, String.format("Файл: %d строк", totalLines));
         checkCancelled();
 
-        // Чтение и парсинг CSV
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                    new FileInputStream(sourceFile), 
-                    StandardCharsets.UTF_8))) {
+                new InputStreamReader(new FileInputStream(sourceFile), StandardCharsets.UTF_8))) {
             
             String line;
             int lineNum = 0;
             boolean inDeviceSection = false;
-            boolean inHistorySection = false;
             
             while ((line = reader.readLine()) != null) {
                 lineNum++;
@@ -77,48 +57,34 @@ public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> 
                 
                 if (lineNum % 10 == 0) {
                     int percent = 5 + (int) ((lineNum / (double) totalLines) * 70);
-                    publishProgress(percent, 
-                        String.format("Обработано строк: %d / %d", lineNum, totalLines));
-                    
+                    publishProgress(percent, String.format("Чтение: %d/%d", lineNum, totalLines));
                     Thread.sleep(20);
                 }
                 
-                if (line.trim().isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
+                if (line.trim().isEmpty() || line.startsWith("#")) continue;
                 
-                if (line.contains("=== ТЕКУЩЕЕ СОСТОЯНИЕ УСТРОЙСТВ ===")) {
+                if (line.contains("=== УСТРОЙСТВА ===")) {
                     inDeviceSection = true;
-                    inHistorySection = false;
-                    continue;
-                } else if (line.contains("=== ИСТОРИЯ ПОТРЕБЛЕНИЯ ===")) {
-                    inDeviceSection = false;
-                    inHistorySection = true;
                     continue;
                 }
                 
-                if (inDeviceSection && !line.startsWith("ID,")) {
-                    String[] parts = parseCsvLine(line);
-                    if (parts.length >= 5) {
+                if (inDeviceSection && !line.startsWith("ID;")) {
+                    // Используем точку с запятой как разделитель
+                    String[] parts = line.split(";", -1);
+                    if (parts.length >= 6) {
                         deviceRows.add(parts);
-                    }
-                } else if (inHistorySection && !line.startsWith("Устройство,")) {
-                    String[] parts = parseCsvLine(line);
-                    if (parts.length >= 4) {
-                        historyRows.add(parts);
                     }
                 }
             }
         }
 
-        publishProgress(75, "Парсинг завершен. Обработка данных...");
+        publishProgress(75, "Парсинг завершен");
         Thread.sleep(300);
 
-        // Создание устройств через callback в EDT
         List<ApplianceController> createdDevices = new ArrayList<>();
         
         if (powerSystem != null && guiCallback != null && !deviceRows.isEmpty()) {
-            publishProgress(80, "Создание устройств в системе...");
+            publishProgress(80, "Восстановление устройств...");
             
             for (int i = 0; i < deviceRows.size(); i++) {
                 checkCancelled();
@@ -126,7 +92,7 @@ public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> 
                 String[] row = deviceRows.get(i);
                 
                 try {
-                    ApplianceController controller = createDeviceFromRow(row);
+                    ApplianceController controller = restoreDeviceFromRow(row);
                     if (controller != null) {
                         final ApplianceController finalController = controller;
                         javax.swing.SwingUtilities.invokeLater(() -> {
@@ -137,115 +103,149 @@ public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> 
                         Thread.sleep(50);
                     }
                 } catch (Exception e) {
-                    System.err.println("[ImportDataTask] Ошибка создания устройства: " + e.getMessage());
+                    System.err.println("[ImportDataTask] Ошибка восстановления строки " + (i+1) + ": " + e.getMessage());
                     e.printStackTrace();
                 }
                 
                 int percent = 80 + (int) ((i / (double) deviceRows.size()) * 15);
-                publishProgress(percent, 
-                    String.format("Создано устройств: %d / %d", i + 1, deviceRows.size()));
+                publishProgress(percent, String.format("Создано: %d/%d", i+1, deviceRows.size()));
             }
         }
 
-        publishProgress(95, "Финализация импорта...");
+        publishProgress(95, "Финализация...");
         Thread.sleep(300);
 
-        ImportResult result = new ImportResult(
-            deviceRows,
-            historyRows,
-            createdDevices
-        );
-        
+        ImportResult result = new ImportResult(deviceRows, createdDevices);
         publishProgress(100, "Импорт завершен!");
         
         return result;
     }
 
-    /**
-     * Создание контроллера устройства из CSV строки.
-     */
-    private ApplianceController createDeviceFromRow(String[] row) {
-        if (row.length < 5) {
-            System.err.println("[ImportDataTask] Недостаточно колонок: " + row.length);
-            return null;
+    private ApplianceController restoreDeviceFromRow(String[] row) {
+        String id = row[0].trim();
+        String type = row[1].trim();
+        String name = row[2].trim();
+        double power = parseDouble(row[3]);
+        String stateStr = row[4].trim();
+        String extraParams = row.length > 5 ? row[5].trim() : "";
+        
+        PowerState state;
+        try {
+            state = PowerState.valueOf(stateStr);
+        } catch (IllegalArgumentException e) {
+            System.err.println("[Import] Неизвестное состояние '" + stateStr + "', используем OFF");
+            state = PowerState.OFF;
         }
         
-        String id = row[0].trim();
-        String name = row[1].trim();
-        String type = row[2].trim();
-        double power = parsePower(row[4]);
-        
-        System.out.println("[ImportDataTask] Создание: " + name + " (" + type + ") - " + power + " Вт");
+        System.out.println(String.format("[Import] %s: %s (%.0f Вт, %s, доп: '%s')", 
+            type, name, power, state, extraParams));
         
         switch (type) {
             case "Kettle":
-                Kettle kettle = new Kettle(id, name, power > 0 ? power : 2000.0);
-                return new KettleController(kettle);
-                
+                return restoreKettle(id, name, power, state, extraParams);
             case "Lamp":
-                Lamp lamp = new Lamp(id, name, power > 0 ? power : 60.0);
-                return new LampController(lamp);
-                
+                return restoreLamp(id, name, power, state, extraParams);
             case "Computer":
-                Computer computer = new Computer(id, name, power > 0 ? power : 300.0);
-                return new ComputerController(computer);
-                
+                return restoreComputer(id, name, power, state, extraParams);
             default:
-                System.err.println("[ImportDataTask] Неизвестный тип устройства: " + type);
+                System.err.println("[Import] Неизвестный тип: " + type);
                 return null;
         }
     }
 
-    private double parsePower(String powerStr) {
+    private KettleController restoreKettle(String id, String name, double power, 
+                                          PowerState state, String extraParams) {
+        Kettle kettle = new Kettle(id, name, power);
+        
+        Map<String, String> params = parseExtraParams(extraParams);
+        if (params.containsKey("temp")) {
+            double temp = parseDouble(params.get("temp"));
+            try {
+                java.lang.reflect.Field tempField = Kettle.class.getDeclaredField("temperature");
+                tempField.setAccessible(true);
+                tempField.set(kettle, temp);
+                System.out.println("[Import] Восстановлена температура: " + temp + "°C");
+            } catch (Exception e) {
+                System.err.println("[Import] Не удалось восстановить температуру: " + e.getMessage());
+            }
+        }
+        
+        if (state == PowerState.HEATING || state == PowerState.COOLING) {
+            kettle.turnOn();
+        }
+        
+        return new KettleController(kettle);
+    }
+
+    private LampController restoreLamp(String id, String name, double power, 
+                                       PowerState state, String extraParams) {
+        Lamp lamp = new Lamp(id, name, power);
+        
+        if (state == PowerState.ON_GRID) {
+            lamp.turnOn();
+        }
+        
+        return new LampController(lamp);
+    }
+
+    private ComputerController restoreComputer(String id, String name, double power, 
+                                              PowerState state, String extraParams) {
+        Computer computer = new Computer(id, name, power);
+        
+        Map<String, String> params = parseExtraParams(extraParams);
+        if (params.containsKey("battery")) {
+            double battery = parseDouble(params.get("battery"));
+            try {
+                java.lang.reflect.Field batteryField = Computer.class.getDeclaredField("batteryLevel");
+                batteryField.setAccessible(true);
+                batteryField.set(computer, battery);
+                System.out.println("[Import] Восстановлен уровень батареи: " + battery + "%");
+            } catch (Exception e) {
+                System.err.println("[Import] Не удалось восстановить уровень батареи: " + e.getMessage());
+            }
+        }
+        
+        if (state == PowerState.ON_GRID || state == PowerState.ON_BATTERY) {
+            computer.turnOn();
+        }
+        
+        return new ComputerController(computer);
+    }
+
+    private Map<String, String> parseExtraParams(String extraParams) {
+        Map<String, String> result = new HashMap<>();
+        
+        if (extraParams == null || extraParams.isEmpty() || extraParams.equals("none")) {
+            return result;
+        }
+        
+        // Разделитель для дополнительных параметров - вертикальная черта
+        String[] pairs = extraParams.split("\\|");
+        for (String pair : pairs) {
+            String[] kv = pair.split("=");
+            if (kv.length == 2) {
+                result.put(kv[0].trim(), kv[1].trim());
+            }
+        }
+        
+        return result;
+    }
+
+    private double parseDouble(String value) {
         try {
-            String normalized = powerStr.trim().replace(",", ".");
-            double value = Double.parseDouble(normalized);
-            return value;
+            return Double.parseDouble(value.trim().replace(",", "."));
         } catch (NumberFormatException e) {
-            System.err.println("[ImportDataTask] Ошибка парсинга мощности: " + powerStr);
+            System.err.println("[Import] Не удалось распарсить число: '" + value + "'");
             return 0.0;
         }
     }
 
-    /**
-     * Парсинг CSV строки с учетом кавычек и запятых.
-     */
-    private String[] parseCsvLine(String line) {
-        List<String> result = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inQuotes = false;
-        
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == ',' && !inQuotes) {
-                result.add(current.toString());
-                current = new StringBuilder();
-            } else {
-                current.append(c);
-            }
-        }
-        
-        result.add(current.toString());
-        
-        return result.toArray(new String[0]);
-    }
-
-    /**
-     * Результат импорта с информацией о прочитанных и созданных устройствах.
-     */
     public static class ImportResult {
         private final List<String[]> deviceRows;
-        private final List<String[]> historyRows;
         private final List<ApplianceController> createdDevices;
 
-        public ImportResult(List<String[]> deviceRows, 
-                           List<String[]> historyRows,
-                           List<ApplianceController> createdDevices) {
+        public ImportResult(List<String[]> deviceRows, List<ApplianceController> createdDevices) {
             this.deviceRows = deviceRows;
-            this.historyRows = historyRows;
             this.createdDevices = createdDevices;
         }
 
@@ -253,24 +253,8 @@ public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> 
             return deviceRows.size();
         }
 
-        public int getHistoryCount() {
-            return historyRows.size();
-        }
-
         public int getCreatedCount() {
             return createdDevices.size();
-        }
-
-        public List<String[]> getDeviceRows() {
-            return deviceRows;
-        }
-
-        public List<String[]> getHistoryRows() {
-            return historyRows;
-        }
-
-        public List<ApplianceController> getCreatedDevices() {
-            return createdDevices;
         }
 
         @Override
@@ -278,24 +262,35 @@ public class ImportDataTask extends BackgroundTask<ImportDataTask.ImportResult> 
             StringBuilder sb = new StringBuilder();
             
             sb.append("=== РЕЗУЛЬТАТ ИМПОРТА ===\n\n");
-            sb.append(String.format("📄 Прочитано устройств из файла: %d\n", getDeviceCount()));
-            sb.append(String.format("📄 Прочитано записей истории: %d\n", getHistoryCount()));
-            sb.append(String.format("✅ Создано устройств в системе: %d\n\n", getCreatedCount()));
+            sb.append(String.format("📄 Прочитано из файла: %d устройств\n", getDeviceCount()));
+            sb.append(String.format("✅ Восстановлено в системе: %d устройств\n\n", getCreatedCount()));
             
             if (getCreatedCount() > 0) {
-                sb.append("ДОБАВЛЕННЫЕ УСТРОЙСТВА:\n");
+                sb.append("ВОССТАНОВЛЕННЫЕ УСТРОЙСТВА:\n");
                 for (ApplianceController controller : createdDevices) {
                     Appliance appliance = controller.getAppliance();
-                    sb.append(String.format("  • %s (%s) - %.0f Вт\n", 
+                    
+                    String extra = "";
+                    if (appliance instanceof Kettle) {
+                        Kettle k = (Kettle) appliance;
+                        extra = String.format(" | Температура: %.1f°C", k.getTemperature());
+                    } else if (appliance instanceof Computer) {
+                        Computer c = (Computer) appliance;
+                        extra = String.format(" | Батарея: %.0f%%", c.getBatteryLevel());
+                    }
+                    
+                    sb.append(String.format("  • %s (%s) - %.0f Вт [%s]%s\n", 
                         appliance.getName(),
                         appliance.getClass().getSimpleName(),
-                        appliance.getRatedPower()));
+                        appliance.getRatedPower(),
+                        appliance.getState().getDisplayName(),
+                        extra));
                 }
             }
             
             if (getCreatedCount() < getDeviceCount()) {
                 int skipped = getDeviceCount() - getCreatedCount();
-                sb.append(String.format("\n⚠️ Пропущено устройств: %d\n", skipped));
+                sb.append(String.format("\n⚠️ Пропущено: %d устройств\n", skipped));
             }
             
             return sb.toString();

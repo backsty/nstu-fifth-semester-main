@@ -2,7 +2,6 @@ package pw.ns2030.task;
 
 import pw.ns2030.controller.ApplianceController;
 import pw.ns2030.model.*;
-import pw.ns2030.task.TaskHelpers.*;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -10,10 +9,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-/**
- * Задача экспорта данных системы в CSV файл.
- * Экспортирует текущее состояние устройств и историю потребления.
- */
 public class ExportDataTask extends BackgroundTask<File> {
     private static final DateTimeFormatter TIMESTAMP_FORMAT = 
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -34,7 +29,6 @@ public class ExportDataTask extends BackgroundTask<File> {
     protected File performTask() throws Exception {
         publishProgress(0, "Подготовка к экспорту...");
         Thread.sleep(300);
-        
         checkCancelled();
 
         try (BufferedWriter writer = new BufferedWriter(
@@ -42,8 +36,7 @@ public class ExportDataTask extends BackgroundTask<File> {
                     new FileOutputStream(targetFile), 
                     StandardCharsets.UTF_8))) {
             
-            // Заголовок файла
-            writer.write("# Экспорт данных системы потребителей энергии\n");
+            writer.write("# Экспорт системы потребителей энергии\n");
             writer.write("# Дата: " + LocalDateTime.now().format(TIMESTAMP_FORMAT) + "\n");
             writer.write("# Устройств: " + controllers.size() + "\n");
             writer.write("\n");
@@ -51,9 +44,8 @@ public class ExportDataTask extends BackgroundTask<File> {
             publishProgress(5, "Заголовок записан");
             checkCancelled();
             
-            // Экспорт текущего состояния устройств
-            writer.write("=== ТЕКУЩЕЕ СОСТОЯНИЕ УСТРОЙСТВ ===\n");
-            writer.write("ID,Название,Тип,Состояние,Мощность (Вт),Доп. информация\n");
+            writer.write("=== УСТРОЙСТВА ===\n");
+            writer.write("ID;Тип;Название;Мощность;Состояние;ДопПараметры\n");
             
             int total = controllers.size();
             for (int i = 0; i < total; i++) {
@@ -62,101 +54,58 @@ public class ExportDataTask extends BackgroundTask<File> {
                 ApplianceController controller = controllers.get(i);
                 Appliance appliance = controller.getAppliance();
                 
-                String extraInfo = getExtraInfo(appliance);
+                String row = buildDeviceRow(appliance);
+                writer.write(row + "\n");
                 
-                writer.write(String.format("%s,%s,%s,%s,%.2f,%s\n",
-                    appliance.getId(),
-                    escapeCsv(appliance.getName()),
-                    appliance.getClass().getSimpleName(),
-                    appliance.getState().getDisplayName(),
-                    appliance.getCurrentPower(),
-                    extraInfo));
-                
-                int percent = 5 + (int) ((i / (double) total) * 40);
+                int percent = 5 + (int) ((i / (double) total) * 90);
                 publishProgress(percent, 
-                    String.format("Экспортировано устройств: %d / %d", i + 1, total));
+                    String.format("Экспорт: %d/%d - %s", i+1, total, appliance.getName()));
                 
-                if (i % 3 == 0) {
-                    Thread.sleep(100);
-                }
+                if (i % 3 == 0) Thread.sleep(100);
             }
             
             writer.write("\n");
-            publishProgress(45, "Состояние устройств экспортировано");
-            
-            // Экспорт истории потребления
-            if (includeHistory) {
-                checkCancelled();
-                
-                writer.write("=== ИСТОРИЯ ПОТРЕБЛЕНИЯ ===\n");
-                writer.write("Устройство,Время,Состояние,Мощность (Вт)\n");
-                
-                int recordsWritten = 0;
-                for (int i = 0; i < total; i++) {
-                    checkCancelled();
-                    
-                    ApplianceController controller = controllers.get(i);
-                    Appliance appliance = controller.getAppliance();
-                    
-                    // Генерируем пример истории
-                    for (int j = 0; j < 10; j++) {
-                        writer.write(String.format("%s,%s,%s,%.2f\n",
-                            escapeCsv(appliance.getName()),
-                            LocalDateTime.now().minusMinutes(10 - j).format(TIMESTAMP_FORMAT),
-                            appliance.getState().getDisplayName(),
-                            appliance.getCurrentPower()));
-                        
-                        recordsWritten++;
-                    }
-                    
-                    int percent = 45 + (int) ((i / (double) total) * 50);
-                    publishProgress(percent, 
-                        String.format("Экспортировано записей: %d", recordsWritten));
-                    
-                    Thread.sleep(50);
-                }
-                
-                writer.write("\n");
-            }
-            
             publishProgress(95, "Завершение записи...");
             writer.flush();
         }
 
         publishProgress(100, "Экспорт завершен!");
         Thread.sleep(200);
-        
         return targetFile;
     }
 
-    /**
-     * Получение дополнительной информации о устройстве.
-     */
-    private String getExtraInfo(Appliance appliance) {
-        if (appliance instanceof Kettle) {
-            Kettle kettle = (Kettle) appliance;
-            return String.format("Температура: %.1f°C", kettle.getTemperature());
-        } else if (appliance instanceof Computer) {
-            Computer computer = (Computer) appliance;
-            return String.format("Батарея: %.0f%%", computer.getBatteryLevel());
-        } else if (appliance instanceof Lamp) {
-            return "N/A";
-        }
-        return "";
+    private String buildDeviceRow(Appliance appliance) {
+        StringBuilder sb = new StringBuilder();
+        
+        // Используем точку с запятой как разделитель
+        sb.append(appliance.getId()).append(";");
+        sb.append(appliance.getClass().getSimpleName()).append(";");
+        sb.append(appliance.getName()).append(";");
+        sb.append(String.format("%.2f", appliance.getRatedPower())).append(";");
+        sb.append(appliance.getState().name()).append(";");
+        
+        String extraParams = extractExtraParameters(appliance);
+        sb.append(extraParams);
+        
+        return sb.toString();
     }
 
-    /**
-     * Экранирование строк для CSV формата.
-     */
-    private String escapeCsv(String value) {
-        if (value == null) {
-            return "";
+    private String extractExtraParameters(Appliance appliance) {
+        if (appliance instanceof Kettle) {
+            Kettle kettle = (Kettle) appliance;
+            return String.format("temp=%.2f", kettle.getTemperature());
+            
+        } else if (appliance instanceof Computer) {
+            Computer computer = (Computer) appliance;
+            return String.format("battery=%.2f|charging=%b|onBattery=%b", 
+                computer.getBatteryLevel(),
+                computer.isCharging(),
+                computer.isOnBattery());
+                
+        } else if (appliance instanceof Lamp) {
+            return "none";
         }
         
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        
-        return value;
+        return "";
     }
 }

@@ -23,23 +23,8 @@ public class TaskHelpers {
      * Слушатель завершения задачи.
      */
     public interface TaskCompletionListener<T> {
-        /**
-         * Вызывается при успешном завершении задачи.
-         * 
-         * @param result результат выполнения
-         */
         void onSuccess(T result);
-        
-        /**
-         * Вызывается при ошибке выполнения.
-         * 
-         * @param error исключение с деталями ошибки
-         */
         void onError(Exception error);
-        
-        /**
-         * Вызывается при отмене задачи пользователем.
-         */
         void onCancelled();
     }
 
